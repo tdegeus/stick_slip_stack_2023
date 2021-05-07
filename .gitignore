@@ -1,3 +1,7 @@
+build
+*.h5
+shelephant_*
+
 # Prerequisites
 *.d
 
