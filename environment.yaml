@@ -28,3 +28,4 @@ dependencies:
   - parallel
   - gooseslurm
   - goosehdf5
+  - shelephant
