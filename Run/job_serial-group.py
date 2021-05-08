@@ -31,7 +31,7 @@ fi
 {0:s}
 '''
 
-commands = ['python {0:s}'.format(file) for file in args.files]
+commands = ['Run {0:s}'.format(file) for file in args.files]
 
 args.group = 1
 ngroup = int(np.ceil(len(commands) / args.group))
