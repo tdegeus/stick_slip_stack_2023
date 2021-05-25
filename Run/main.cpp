@@ -100,8 +100,8 @@ public:
             nodemap,
             H5Easy::load<xt::xtensor<bool, 1>>(m_file, "/layers/is_plastic"));
 
+        this->setDt(H5Easy::load<double>(m_file, "/run/dt"));
         this->setDriveStiffness(H5Easy::load<double>(m_file, "/layers/k_drive"));
-
         this->setMassMatrix(H5Easy::load<xt::xtensor<double, 1>>(m_file, "/rho"));
         this->setDampingMatrix(H5Easy::load<xt::xtensor<double, 1>>(m_file, "/damping/alpha"));
 
@@ -113,8 +113,6 @@ public:
             H5Easy::load<xt::xtensor<double, 1>>(m_file, "/cusp/K"),
             H5Easy::load<xt::xtensor<double, 1>>(m_file, "/cusp/G"),
             read_epsy(m_file, m_N));
-
-        this->setDt(H5Easy::load<double>(m_file, "/run/dt"));
     }
 
 public:
@@ -137,8 +135,11 @@ public:
             return;
         }
 
+        auto drive = H5Easy::load<xt::xtensor<bool, 2>>(m_file, "/drive/drive");
+        auto height = H5Easy::load<xt::xtensor<double, 1>>(m_file, "/drive/height");
+        auto dgamma = H5Easy::load<xt::xtensor<double, 1>>(m_file, "/drive/delta_gamma");
+        size_t ninc = dgamma.size();
         size_t inc = 0;
-        size_t ninc = H5Easy::load<size_t>(m_file, "/drive/ninc");
 
         if (m_file.exist("/stored")) {
             size_t i = H5Easy::getSize(m_file, "/stored") - std::size_t(1);
@@ -151,6 +152,7 @@ public:
             H5Easy::dump(m_file, "/stored", 0, {0});
             H5Easy::dump(m_file, "/t", 0.0, {0});
             H5Easy::dump(m_file, fmt::format("/disp/{0:d}", inc), m_u);
+            H5Easy::dump(m_file, fmt::format("/drive/ubar/{0:d}", inc), this->layerUbar());
 
             H5Easy::dumpAttribute(m_file, "/stored", "desc",
                 std::string("List of increments in '/disp/{0:d}'"));
@@ -160,13 +162,14 @@ public:
 
             H5Easy::dumpAttribute(m_file, fmt::format("/disp/{0:d}", inc), "desc",
                 std::string("Displacement at the end of the increment."));
+
+            H5Easy::dumpAttribute(m_file, fmt::format("/drive/ubar/{0:d}", inc), "desc",
+                std::string("Position of the loading frame of each layer."));
         }
 
         for (++inc; inc < ninc; ++inc) {
 
-            this->layerSetUbar(
-                H5Easy::load<xt::xtensor<double, 2>>(m_file, fmt::format("/drive/ubar/{0:d}", inc)),
-                H5Easy::load<xt::xtensor<bool, 2>>(m_file, "/drive/drive"));
+            this->addAffineSimpleShear(dgamma(inc), drive, height);
 
             size_t iiter = this->minimise();
 
@@ -175,6 +178,7 @@ public:
             H5Easy::dump(m_file, "/stored", inc, {inc});
             H5Easy::dump(m_file, "/t", m_t, {inc});
             H5Easy::dump(m_file, fmt::format("/disp/{0:d}", inc), m_u);
+            H5Easy::dump(m_file, fmt::format("/drive/ubar/{0:d}", inc), this->layerUbar());
         }
     }
 };

@@ -212,9 +212,9 @@ class BottomLayerElastic(MyMesh):
 
 # ==================================================================================================
 
-def generate(filename, nplates, seed, rid):
+def generate(filename, nplates, seed, rid, k_drive):
 
-    N = 2 * (3**6)
+    N = 3 ** 5
     M = int(N / 4)
     h = np.pi
     L = h * float(N)
@@ -297,6 +297,9 @@ def generate(filename, nplates, seed, rid):
     # epsy[0: left, 0] *= init_factor
     # epsy[right: N, 0] *= init_factor
     # epsy = np.cumsum(epsy, axis=1)
+
+    delta_gamma = 0.01 * eps0 * np.ones(1000)
+    delta_gamma[0] = 0
 
     c = 1.0
     G = 1.0
@@ -410,7 +413,7 @@ def generate(filename, nplates, seed, rid):
             data["/layers/{0:d}/nodemap".format(i)] = nodemap[i]
 
         key = "/layers/k_drive"
-        data[key] = 0.01
+        data[key] = k_drive
         data[key].attrs["desc"] = "Stiffness of the spring providing the drive"
 
         key = "/layers/is_plastic"
@@ -424,19 +427,17 @@ def generate(filename, nplates, seed, rid):
         data[key] = drive
         data[key].attrs["desc"] = "Per layer: true when the layer's mean position is actuated"
 
-        key = "/drive/ninc"
-        data[key] = ninc
-        data[key].attrs["desc"] = "Number of increments to drive"
+        key = "/drive/delta_gamma"
+        data[key] = delta_gamma
+        data[key].attrs["desc"] = "Affine simple shear increment"
 
-        for inc in range(ninc):
-            for i, ispl in enumerate(is_plastic):
-                if not ispl and i > 0:
-                    ubar[i, 0] = float(inc) * 0.001 * eps0 * Hi[i]
-            data["/drive/ubar/{0:d}".format(inc)] = ubar
+        key = "/drive/height"
+        data[key] = Hi
+        data[key].attrs["desc"] = "Height of the loading frame of each layer"
 
 # ----------
 
-N = 2 * (3**6)
+N = 3 ** 5
 seed = 0
 max_plates = 100
 
@@ -444,7 +445,9 @@ for rid in range(3):
 
     for nplates in [2, 3, 4, 5]:
 
-        generate("id={0:d}_nplates={1:d}.hdf5".format(rid, nplates), nplates, seed, rid)
+        for k_plate in [0.001, 0.01, 0.1]:
+
+            generate("id={0:d}_nplates={1:d}_kplate={2:.0e}.hdf5".format(rid, nplates, k_plate), nplates, seed, rid, k_plate)
 
     seed += N * (max_plates - 1)
 
