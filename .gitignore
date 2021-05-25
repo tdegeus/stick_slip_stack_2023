@@ -1,5 +1,6 @@
 build
 *.h5
+*.pdf
 shelephant_*
 
 # Prerequisites
