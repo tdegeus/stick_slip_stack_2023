@@ -412,16 +412,20 @@ def generate(filename, nplates, seed, rid, k_drive):
             data["/layers/{0:d}/elemmap".format(i)] = elemmap[i]
             data["/layers/{0:d}/nodemap".format(i)] = nodemap[i]
 
-        key = "/layers/k_drive"
-        data[key] = k_drive
-        data[key].attrs["desc"] = "Stiffness of the spring providing the drive"
-
         key = "/layers/is_plastic"
         data[key] = is_plastic
         data[key].attrs["desc"] = "Per layer: true is the layer is plastic"
 
         ubar = np.zeros((nlayer, 2))
         ninc = 1000
+
+        key = "/drive/k"
+        data[key] = k_drive
+        data[key].attrs["desc"] = "Stiffness of the spring providing the drive"
+
+        key = "/drive/symmetric"
+        data[key] = 1
+        data[key].attrs["desc"] = "If false, the driving spring buckles under tension."
 
         key = "/drive/drive"
         data[key] = drive

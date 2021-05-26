@@ -101,7 +101,6 @@ public:
             H5Easy::load<xt::xtensor<bool, 1>>(m_file, "/layers/is_plastic"));
 
         this->setDt(H5Easy::load<double>(m_file, "/run/dt"));
-        this->setDriveStiffness(H5Easy::load<double>(m_file, "/layers/k_drive"));
         this->setMassMatrix(H5Easy::load<xt::xtensor<double, 1>>(m_file, "/rho"));
         this->setDampingMatrix(H5Easy::load<xt::xtensor<double, 1>>(m_file, "/damping/alpha"));
 
@@ -113,6 +112,10 @@ public:
             H5Easy::load<xt::xtensor<double, 1>>(m_file, "/cusp/K"),
             H5Easy::load<xt::xtensor<double, 1>>(m_file, "/cusp/G"),
             read_epsy(m_file, m_N));
+
+        this->setDriveStiffness(
+            H5Easy::load<double>(m_file, "/drive/k"),
+            static_cast<bool>(H5Easy::load<int>(m_file, "/drive/symmetric")));
     }
 
 public:
