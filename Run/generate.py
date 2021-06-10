@@ -2,7 +2,10 @@ import h5py
 import numpy as np
 import GooseFEM
 import prrng
-import uuid
+import os
+from setuptools_scm import get_version
+
+version = get_version(root=os.path.join(os.path.dirname(__file__), '..'))
 
 # ==================================================================================================
 
@@ -212,7 +215,7 @@ class BottomLayerElastic(MyMesh):
 
 # ==================================================================================================
 
-def generate(filename, nplates, seed, rid, k_drive):
+def generate(version, filename, nplates, seed, rid, k_drive, symmetric):
 
     N = 3 ** 5
     M = int(N / 4)
@@ -287,7 +290,6 @@ def generate(filename, nplates, seed, rid, k_drive):
     initseq = np.zeros_like(initstate)
     generators = prrng.pcg32_array(initstate, initseq)
 
-    realization = str(uuid.uuid4())
     k = 2.0
     eps0 = 0.5 * 1e-4
     eps_offset = 1e-2 * (2.0 * eps0)
@@ -393,13 +395,13 @@ def generate(filename, nplates, seed, rid, k_drive):
         data[key] = G * np.ones((len(elastic)))
         data[key].attrs["desc"] = "Shear modulus for elements in '/elastic/elem' [nelem - N]"
 
-        key = "/id/uuid"
-        data[key] = realization
-        data[key].attrs["desc"] = "Realisation's unique identifier"
+        key = "/meta/seed_base"
+        data[key] = seed
+        data[key].attrs["desc"] = "Basic seed == 'unique' identifier"
 
-        key = "/id/index"
-        data[key] = rid
-        data[key].attrs["desc"] = "Realisation's index"
+        key = "/meta/Run/generate.py"
+        data[key] = version
+        data[key].attrs["desc"] = "Version when generating"
 
         elemmap = stitch.elemmap()
         nodemap = stitch.nodemap()
@@ -424,7 +426,7 @@ def generate(filename, nplates, seed, rid, k_drive):
         data[key].attrs["desc"] = "Stiffness of the spring providing the drive"
 
         key = "/drive/symmetric"
-        data[key] = 1
+        data[key] = symmetric
         data[key].attrs["desc"] = "If false, the driving spring buckles under tension."
 
         key = "/drive/drive"
@@ -447,11 +449,13 @@ max_plates = 100
 
 for rid in range(3):
 
-    for nplates in [2, 3, 4, 5]:
+    for symmetric in [1, 0]:
 
-        for k_plate in [0.001, 0.01, 0.1]:
+        for nplates in [2, 3, 4, 5]:
 
-            generate("id={0:d}_nplates={1:d}_kplate={2:.0e}.hdf5".format(rid, nplates, k_plate), nplates, seed, rid, k_plate)
+            for k_plate in [0.001, 0.01, 0.1]:
+
+                generate(version, "id={0:d}_nplates={1:d}_kplate={2:.0e}_symmetric={3:d}.h5".format(rid, nplates, k_plate, symmetric), nplates, seed, rid, k_plate, symmetric)
 
     seed += N * (max_plates - 1)
 
