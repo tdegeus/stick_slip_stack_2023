@@ -349,15 +349,15 @@ def generate(version, filename, nplates, seed, rid, k_drive, symmetric):
 
         key = "/cusp/elem"
         data[key] = plastic
-        data[key].attrs["desc"] = "Plastic elements with cusp potential [N]"
+        data[key].attrs["desc"] = "Plastic elements with cusp potential [nplastic]"
 
         key = "/cusp/K"
         data[key] = K * np.ones((len(plastic)))
-        data[key].attrs["desc"] = "Bulk modulus for elements in '/cusp/elem' [N]"
+        data[key].attrs["desc"] = "Bulk modulus for elements in '/cusp/elem' [nplastic]"
 
         key = "/cusp/G"
         data[key] = G * np.ones((len(plastic)))
-        data[key].attrs["desc"] = "Shear modulus for elements in '/cusp/elem' [N]"
+        data[key].attrs["desc"] = "Shear modulus for elements in '/cusp/elem' [nplastic]"
 
         key = "/cusp/epsy/initstate"
         data[key] = initstate
@@ -373,7 +373,7 @@ def generate(version, filename, nplates, seed, rid, k_drive, symmetric):
 
         key = "/cusp/epsy/eps0"
         data[key] = eps0
-        data[key].attrs["desc"] = "Yield strain normalisation: multiply all yield strains with this factor"
+        data[key].attrs["desc"] = "Yield strain normalisation: multiply all yield strains with twice this factor"
 
         key = "/cusp/epsy/eps_offset"
         data[key] = eps_offset
@@ -394,6 +394,34 @@ def generate(version, filename, nplates, seed, rid, k_drive, symmetric):
         key = "/elastic/G"
         data[key] = G * np.ones((len(elastic)))
         data[key].attrs["desc"] = "Shear modulus for elements in '/elastic/elem' [nelem - N]"
+
+        key = "/meta/normalisation/N"
+        data[key] = N
+        data[key].attrs["desc"] = "Number of blocks along each plastic layer"
+
+        key = "/meta/normalisation/l"
+        data[key] = h
+        data[key].attrs["desc"] = "Elementary block size"
+
+        key = "/meta/normalisation/rho"
+        data[key] = rho
+        data[key].attrs["desc"] = "Elementary density"
+
+        key = "/meta/normalisation/G"
+        data[key] = G
+        data[key].attrs["desc"] = "Uniform shear modulus == 2 mu"
+
+        key = "/meta/normalisation/K"
+        data[key] = K
+        data[key].attrs["desc"] = "Uniform bulk modulus == kappa"
+
+        key = "/meta/normalisation/eps"
+        data[key] = eps0
+        data[key].attrs["desc"] = "Typical yield strain"
+
+        key = "/meta/normalisation/sig"
+        data[key] = 2.0 * G * eps0
+        data[key].attrs["desc"] = "== 2 G eps0"
 
         key = "/meta/seed_base"
         data[key] = seed
