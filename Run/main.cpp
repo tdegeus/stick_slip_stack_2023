@@ -183,6 +183,8 @@ public:
             H5Easy::dump(m_file, fmt::format("/disp/{0:d}", inc), m_u);
             H5Easy::dump(m_file, fmt::format("/drive/ubar/{0:d}", inc), this->layerUbar());
         }
+
+        H5Easy::dump(m_file, "/meta/Run/completed", 1);
     }
 };
 
