@@ -16,6 +16,7 @@ jobs:
       matrix:
         code:
           - Run
+          - RunFixedBoundary
 
     defaults:
       run:
