@@ -215,7 +215,7 @@ class BottomLayerElastic(MyMesh):
 
 # ==================================================================================================
 
-def generate(version, filename, nplates, seed, rid):
+def generate(version, filename, nplates, seed, rid, k_drive, symmetric):
 
     N = 3 ** 5
     M = int(N / 4)
@@ -427,7 +427,7 @@ def generate(version, filename, nplates, seed, rid):
         data[key] = seed
         data[key].attrs["desc"] = "Basic seed == 'unique' identifier"
 
-        key = "/meta/RunFixedBoundary/generate.py"
+        key = "/meta/Run/generate.py"
         data[key] = version
         data[key].attrs["desc"] = "Version when generating"
 
@@ -446,6 +446,29 @@ def generate(version, filename, nplates, seed, rid):
         data[key] = is_plastic
         data[key].attrs["desc"] = "Per layer: true is the layer is plastic"
 
+        ubar = np.zeros((nlayer, 2))
+        ninc = 1000
+
+        key = "/drive/k"
+        data[key] = k_drive
+        data[key].attrs["desc"] = "Stiffness of the spring providing the drive"
+
+        key = "/drive/symmetric"
+        data[key] = symmetric
+        data[key].attrs["desc"] = "If false, the driving spring buckles under tension."
+
+        key = "/drive/drive"
+        data[key] = drive
+        data[key].attrs["desc"] = "Per layer: true when the layer's mean position is actuated"
+
+        key = "/drive/delta_gamma"
+        data[key] = delta_gamma
+        data[key].attrs["desc"] = "Affine simple shear increment"
+
+        key = "/drive/height"
+        data[key] = Hi
+        data[key].attrs["desc"] = "Height of the loading frame of each layer"
+
 # ----------
 
 N = 3 ** 5
@@ -454,9 +477,13 @@ max_plates = 100
 
 for rid in range(3):
 
-    for nplates in [2, 3, 4, 5]:
+    for symmetric in [1, 0]:
 
-        generate(version, "id={0:d}_nplates={1:d}.h5".format(rid, nplates), nplates, seed, rid)
+        for nplates in [2, 3, 4, 5]:
+
+            for k_plate in [0.001, 0.01, 0.1]:
+
+                generate(version, "id={0:d}_nplates={1:d}_kplate={2:.0e}_symmetric={3:d}.h5".format(rid, nplates, k_plate, symmetric), nplates, seed, rid, k_plate, symmetric)
 
     seed += N * (max_plates - 1)
 
