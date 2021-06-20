@@ -5,11 +5,13 @@ project(RunFixedBoundary)
 option(ASSERT "Use assertions" OFF)
 option(DEBUG "Switch on all possible assertions" OFF)
 
-execute_process(
-    COMMAND python -c "from setuptools_scm import get_version; print(get_version(root='..'))"
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    OUTPUT_VARIABLE MYVERSION
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
+if(NOT DEFINED MYVERSION)
+    execute_process(
+        COMMAND python -c "from setuptools_scm import get_version; print(get_version(root='..'))"
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE MYVERSION
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+endif()
 
 message(STATUS "Building ${PROJECT_NAME} ${MYVERSION}")
 
