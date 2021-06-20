@@ -305,7 +305,7 @@ def generate(version, filename, nplates, seed, rid):
 
     c = 1.0
     G = 1.0
-    K = 10.0 * G
+    K = 4.5 * G # consistent with PMMA
     rho = G / c ** 2.0
     qL = 2.0 * np.pi / L
     qh = 2.0 * np.pi / h
