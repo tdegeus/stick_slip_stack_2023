@@ -31,13 +31,13 @@ void DumpWithDescription(
 
 
 static const char USAGE[] =
-    R"(Run
+    R"(RunFixedBoundary
 
 Description:
-    Run simulation until maximum strain.
+    RunFixedBoundary simulation until maximum strain.
 
 Usage:
-    Run [options] <data.hdf5>
+    RunFixedBoundary [options] <data.hdf5>
 
 Options:
     -h, --help      Show help.
@@ -114,12 +114,12 @@ public:
 
     void run()
     {
-        if (m_file.exist("/meta/Run/version")) {
+        if (m_file.exist("/meta/RunFixedBoundary/version")) {
             DumpWithDescription(m_file, "/meta/RunFixedBoundary/version", std::string(MYVERSION),
                 "Code version at compile-time.");
         }
 
-        if (m_file.exist("/meta/Run/completed")) {
+        if (m_file.exist("/meta/RunFixedBoundary/completed")) {
             fmt::print("Marked completed, skipping\n");
             return;
         }
@@ -157,7 +157,8 @@ public:
             this->addSimpleShearEventDriven(m_deps_kick, m_kick);
 
             if (!m_material.checkYieldBoundRight()) {
-                DumpWithDescription(m_file, "/meta/Run/completed", 1, "Signal that this program finished.");
+                DumpWithDescription(m_file, "/meta/RunFixedBoundary/completed", 1,
+                    "Signal that this program finished.");
                 fmt::print("'{0:s}': Completed\n", m_file.getName());
                 return;
             }
@@ -172,7 +173,8 @@ public:
                     }
 
                     if (!m_material.checkYieldBoundRight()) {
-                        DumpWithDescription(m_file, "/meta/Run/completed", 1, "Signal that this program finished.");
+                        DumpWithDescription(m_file, "/meta/RunFixedBoundary/completed", 1,
+                            "Signal that this program finished.");
                         fmt::print("'{0:s}': Completed\n", m_file.getName());
                         return;
                     }
