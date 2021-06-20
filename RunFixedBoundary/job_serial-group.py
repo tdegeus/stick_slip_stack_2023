@@ -52,7 +52,7 @@ for group in range(ngroup):
         'ntasks': 1,
         'cpus-per-task': 1,
         'time': '24h',
-        'account': 'pcsl',
+        'account': 'flexlab-frictionlayers',
         'partition': 'serial',
     }
 
