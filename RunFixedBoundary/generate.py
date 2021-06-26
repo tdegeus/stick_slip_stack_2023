@@ -217,7 +217,7 @@ class BottomLayerElastic(MyMesh):
 
 def generate(version, filename, nplates, seed, rid):
 
-    N = 3 ** 5
+    N = 3 ** 6
     M = int(N / 4)
     h = np.pi
     L = h * float(N)
@@ -259,7 +259,7 @@ def generate(version, filename, nplates, seed, rid):
     left = stitch.nodeset(left)
     right = stitch.nodeset(right)
     bottom = stitch.nodeset(layer_bot.nodesBottomEdge(), 0)
-    top = stitch.nodeset(layer_top.nodesTopEdge(), 2)
+    top = stitch.nodeset(layer_top.nodesTopEdge(), nlayer - 1)
 
     nelem = stitch.nelem()
     coor = stitch.coor()
@@ -271,8 +271,8 @@ def generate(version, filename, nplates, seed, rid):
 
     dofs = stitch.dofs()
     dofs[right, :] = dofs[left, :]
-    dofs[top[0], 0] = dofs[top[-1], 0]
-    dofs[bottom[0], 0] = dofs[bottom[-1], 0]
+    dofs[top[0], :] = dofs[top[-1], :]
+    dofs[bottom[0], :] = dofs[bottom[-1], :]
     dofs = GooseFEM.Mesh.renumber(dofs)
 
     iip = np.concatenate((dofs[bottom, :].ravel(), dofs[top, :].ravel()))
@@ -448,7 +448,7 @@ def generate(version, filename, nplates, seed, rid):
 
 # ----------
 
-N = 3 ** 5
+N = 3 ** 6
 seed = 0
 max_plates = 100
 
