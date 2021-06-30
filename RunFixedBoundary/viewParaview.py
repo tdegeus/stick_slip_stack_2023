@@ -5,7 +5,7 @@ import h5py
 import numpy as np
 import prrng
 import GooseFEM as gf
-import GMatElastoPlasticQPot.Cartesian2d as gmat
+import GMatElastoPlasticQPot.Cartesian2d as GMat
 import FrictionQPotFEM.UniformSingleLayer2d as model
 import XDMFWrite_h5py as xh
 
@@ -65,6 +65,7 @@ for file in tqdm.tqdm(args.files):
             system.setDt(data["/run/dt"][...])
 
             dV = system.quad().AsTensor(2, system.quad().dV())
+            sig0 = data["/meta/normalisation/sig"][...]
 
             output["/coor"] = system.coor()
             output["/conn"] = system.conn()
@@ -76,7 +77,7 @@ for file in tqdm.tqdm(args.files):
                 u = data["/disp/{0:d}".format(inc)][...]
                 system.setU(u)
 
-                Sig = gmat.Sigd(np.average(system.Sig(), weights=dV, axis=1))
+                Sig = GMat.Sigd(np.average(system.Sig() / sig0, weights=dV, axis=1))
 
                 output["/disp/{0:d}".format(inc)] = xh.as3d(u)
                 output["/sigd/{0:d}".format(inc)] = Sig
