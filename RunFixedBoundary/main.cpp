@@ -154,9 +154,16 @@ public:
 
         for (++m_inc;; ++m_inc) {
 
+            if (!m_material_plas.checkYieldBoundRight(5)) {
+                DumpWithDescription(m_file, "/meta/RunFixedBoundary/completed", 1,
+                    "Signal that this program finished.");
+                fmt::print("'{0:s}': Completed\n", m_file.getName());
+                return;
+            }
+
             this->addSimpleShearEventDriven(m_deps_kick, m_kick);
 
-            if (!m_material.checkYieldBoundRight()) {
+            if (!m_material_plas.checkYieldBoundRight(5)) {
                 DumpWithDescription(m_file, "/meta/RunFixedBoundary/completed", 1,
                     "Signal that this program finished.");
                 fmt::print("'{0:s}': Completed\n", m_file.getName());
@@ -172,7 +179,7 @@ public:
                         break;
                     }
 
-                    if (!m_material.checkYieldBoundRight()) {
+                    if (!m_material_plas.checkYieldBoundRight(5)) {
                         DumpWithDescription(m_file, "/meta/RunFixedBoundary/completed", 1,
                             "Signal that this program finished.");
                         fmt::print("'{0:s}': Completed\n", m_file.getName());

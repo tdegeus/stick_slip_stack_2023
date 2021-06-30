@@ -23,6 +23,7 @@ set(HIGHFIVE_USE_BOOST 0)
 set(HIGHFIVE_USE_XTENSOR 1)
 
 find_package(FrictionQPotFEM REQUIRED)
+find_package(prrng REQUIRED)
 find_package(xtensor REQUIRED)
 find_package(HighFive REQUIRED)
 find_package(docopt REQUIRED)
@@ -31,6 +32,7 @@ find_package(cpppath REQUIRED)
 
 target_link_libraries(${PROJECT_NAME}
     FrictionQPotFEM
+    prrng
     xtensor::optimize
     xtensor::use_xsimd
     HighFive
