@@ -43,10 +43,10 @@ for group in range(ngroup):
     command = '\n'.join(c)
     command = slurm.format(command)
 
-    jobname = ('layers/RunFixedBoundary-{0:0' + fmt + 'd}').format(group)
+    jobname = ('RunFixedBoundary-{0:0' + fmt + 'd}').format(group)
 
     sbatch = {
-        'job-name': jobname,
+        'job-name': 'layers-' + jobname,
         'out': jobname + '.out',
         'nodes': 1,
         'ntasks': 1,
