@@ -31,7 +31,7 @@ fi
 {0:s}
 '''
 
-commands = ['Run {0:s}'.format(file) for file in args.files]
+commands = ['stdbuf -o0 -e0 Run {0:s}'.format(file) for file in args.files]
 
 args.group = 1
 ngroup = int(np.ceil(len(commands) / args.group))
@@ -43,7 +43,7 @@ for group in range(ngroup):
     command = '\n'.join(c)
     command = slurm.format(command)
 
-    jobname = ('Run-{0:0' + fmt + 'd}').format(group)
+    jobname = ('layers/Run-{0:0' + fmt + 'd}').format(group)
 
     sbatch = {
         'job-name': jobname,
