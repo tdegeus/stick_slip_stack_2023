@@ -1,7 +1,7 @@
-import os
-import numpy as np
-import GooseSLURM
 import argparse
+import GooseSLURM
+import numpy as np
+import os
 
 parser = argparse.ArgumentParser()
 parser.add_argument('files', nargs='*', type=str)
