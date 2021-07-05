@@ -1,7 +1,7 @@
-import subprocess
 import h5py
 import os
 import tqdm
+
 from shelephant.yaml import dump
 
 def is_completed(file):
@@ -10,9 +10,11 @@ def is_completed(file):
             return data['/meta/Run/completed'][...]
     return False
 
-files = sorted(list(filter(None, subprocess.check_output(
-    "find . -maxdepth 1 -iname 'id*.h5'", shell=True).decode('utf-8').split('\n'))))
+parser = argparse.ArgumentParser()
+parser.add_argument('files', nargs='*', type=str)
+args = parser.parse_args()
+assert np.all([os.path.isfile(file) for file in args.files])
 
-sims = [os.path.relpath(file) for file in tqdm.tqdm(files) if is_completed(file)]
+sims = [os.path.relpath(file) for file in tqdm.tqdm(args.files) if is_completed(file)]
 
 dump('completed.yaml', sims)
