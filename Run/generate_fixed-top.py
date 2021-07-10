@@ -483,7 +483,7 @@ for rid in range(3):
 
             for k_plate in [0.001, 0.01, 0.1]:
 
-                generate(version, "id={0:d}_nplates={1:d}_kplate={2:.0e}_symmetric={3:d}.h5".format(rid, nplates, k_plate, symmetric), nplates, seed, rid, k_plate, symmetric)
+                generate(version, "id={0:03d}_nplates={1:d}_kplate={2:.0e}_symmetric={3:d}.h5".format(rid, nplates, k_plate, symmetric), nplates, seed, rid, k_plate, symmetric)
 
     seed += N * (max_plates - 1)
 
