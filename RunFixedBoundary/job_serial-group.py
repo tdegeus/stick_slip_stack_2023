@@ -26,6 +26,7 @@ elif [[ "${{SYS_TYPE}}" == *S6g1* ]]; then
     conda activate code_layers_s6g1
 else
     echo "Unknown SYS_TYPE ${{SYS_TYPE}}"
+    exit 1
 fi
 
 {0:s}

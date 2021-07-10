@@ -8,6 +8,10 @@
 #SBATCH --account pcsl
 #SBATCH --partition build
 
+# print jobid
+echo "SLURM_JOBID = ${{SLURM_JOBID}}"
+echo ""
+
 # change current directory to the location of the sbatch command
 cd "${SLURM_SUBMIT_DIR}"
 

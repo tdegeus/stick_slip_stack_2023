@@ -19,12 +19,20 @@ namespace FQF = FrictionQPotFEM::UniformMultiLayerIndividualDrive2d;
 namespace GM = GMatElastoPlasticQPot::Cartesian2d;
 
 template <class T>
-void DumpWithDescription(
+void CheckOrDumpWithDescription(
     H5Easy::File& file,
     const std::string& path,
     const T& data,
     const std::string& description)
 {
+    if (file.exist(path)) {
+        T ret = H5Easy::load<T>(file, path);
+        if (ret != data) {
+            throw std::runtime_error("Version mismatch");
+        }
+        return;
+    }
+
     H5Easy::dump(file, path, data);
     H5Easy::dumpAttribute(file, path, "desc", description);
 }
@@ -122,16 +130,14 @@ public:
 
     void run()
     {
-        if (m_file.exist("/meta/Run/version")) {
-            DumpWithDescription(m_file, "/meta/Run/version", std::string(MYVERSION),
-                "Code version at compile-time.");
+        auto deps = FQF::version_dependencies();
+        deps.push_back(prrng::version());
 
-            auto deps = FQF::version_dependencies();
-            deps.push_back(prrng::version());
+        CheckOrDumpWithDescription(m_file, "/meta/Run/version", std::string(MYVERSION),
+            "Code version at compile-time.");
 
-            DumpWithDescription(m_file, "/meta/Run/version_dependencies", deps,
-                "Library versions at compile-time.");
-        }
+        CheckOrDumpWithDescription(m_file, "/meta/Run/version_dependencies", deps,
+            "Library versions at compile-time.");
 
         if (m_file.exist("/meta/Run/completed")) {
             fmt::print("Marked completed, skipping\n");
@@ -149,13 +155,14 @@ public:
             inc = H5Easy::load<decltype(inc)>(m_file, "/stored", {i});
             m_t = H5Easy::load<decltype(m_t)>(m_file, "/t", {i});
             this->setU(H5Easy::load<decltype(m_u)>(m_file, fmt::format("/disp/{0:d}", inc)));
+            this->layerSetTargetUbar(H5Easy::load<decltype(m_layer_ubar_target)>(m_file, fmt::format("/drive/ubar/{0:d}", inc)), drive);
             fmt::print("'{0:s}': Loading, inc = {1:d}\n", m_file.getName(), inc);
         }
         else {
             H5Easy::dump(m_file, "/stored", 0, {0});
             H5Easy::dump(m_file, "/t", 0.0, {0});
             H5Easy::dump(m_file, fmt::format("/disp/{0:d}", inc), m_u);
-            H5Easy::dump(m_file, fmt::format("/drive/ubar/{0:d}", inc), this->layerUbar());
+            H5Easy::dump(m_file, fmt::format("/drive/ubar/{0:d}", inc), this->layerTargetUbar());
 
             H5Easy::dumpAttribute(m_file, "/stored", "desc",
                 std::string("List of increments in '/disp/{0:d}'"));
@@ -181,7 +188,7 @@ public:
             H5Easy::dump(m_file, "/stored", inc, {inc});
             H5Easy::dump(m_file, "/t", m_t, {inc});
             H5Easy::dump(m_file, fmt::format("/disp/{0:d}", inc), m_u);
-            H5Easy::dump(m_file, fmt::format("/drive/ubar/{0:d}", inc), this->layerUbar());
+            H5Easy::dump(m_file, fmt::format("/drive/ubar/{0:d}", inc), this->layerTargetUbar());
         }
 
         H5Easy::dump(m_file, "/meta/Run/completed", 1);

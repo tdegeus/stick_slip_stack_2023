@@ -10,6 +10,10 @@ args = parser.parse_args()
 assert np.all([os.path.isfile(file) for file in args.files])
 
 slurm = '''
+# print jobid
+echo "SLURM_JOBID = ${{SLURM_JOBID}}"
+echo ""
+
 # for safety set the number of cores
 export OMP_NUM_THREADS=1
 
@@ -24,6 +28,7 @@ elif [[ "${{SYS_TYPE}}" == *S6g1* ]]; then
     conda activate code_layers_s6g1
 else
     echo "Unknown SYS_TYPE ${{SYS_TYPE}}"
+    exit 1
 fi
 
 {0:s}
