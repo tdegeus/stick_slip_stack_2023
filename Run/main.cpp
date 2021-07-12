@@ -155,7 +155,8 @@ public:
             inc = H5Easy::load<decltype(inc)>(m_file, "/stored", {i});
             m_t = H5Easy::load<decltype(m_t)>(m_file, "/t", {i});
             this->setU(H5Easy::load<decltype(m_u)>(m_file, fmt::format("/disp/{0:d}", inc)));
-            this->layerSetTargetUbar(H5Easy::load<decltype(m_layer_ubar_target)>(m_file, fmt::format("/drive/ubar/{0:d}", inc)), drive);
+            this->layerSetTargetUbar(H5Easy::load<decltype(m_layer_ubar_target)>(m_file,
+                fmt::format("/drive/ubar/{0:d}", inc)), drive);
             fmt::print("'{0:s}': Loading, inc = {1:d}\n", m_file.getName(), inc);
         }
         else {
