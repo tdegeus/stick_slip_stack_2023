@@ -67,7 +67,7 @@ for ifile, file in enumerate(tqdm.tqdm(args.files)):
     with h5py.File(file, "r") as data:
 
         system = initsystem(data)
-        nlayers = system.nlayers()
+        nlayer = system.nlayer()
         dV = system.quad().AsTensor(2, system.quad().dV())
 
         if ifile == 0:
@@ -75,47 +75,58 @@ for ifile, file in enumerate(tqdm.tqdm(args.files)):
             eps0 = data["/meta/normalisation/eps"][...]
             sig0 = data["/meta/normalisation/sig"][...]
             dt = data["/run/dt"][...]
+            kdrive = data["/drive/k"][...]
         else:
             assert np.isclose(N, data["/meta/normalisation/N"][...])
             assert np.isclose(eps0, data["/meta/normalisation/eps"][...])
             assert np.isclose(sig0, data["/meta/normalisation/sig"][...])
             assert np.isclose(dt, data["/run/dt"][...])
+            assert np.isclose(kdrive, data["/drive/k"][...])
 
         incs = data["/stored"][...]
         ninc = incs.size
         idx_n = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, N)
 
         is_plastic = data["/layers/is_plastic"][...]
-        Strain = np.empty((ninc), dtype=float)
-        Stress_layers = np.empty((ninc, nlayers), dtype=float)
-        S_layers = np.zeros((ninc, nlayers), dtype=int)
-        A_layers = np.zeros((ninc, nlayers), dtype=int)
-        Drive_Ux = np.zeros((ninc, nlayers), dtype=float)
-        Drive_Fx = np.zeros((ninc, nlayers), dtype=float)
         Drive = data["/drive/drive"][...]
+        Drive_x =  np.argwhere(Drive[:, 0]).ravel()
+        Height = data["/drive/height"][...]
+        Dgamma = data["/drive/delta_gamma"][...][incs]
+
+        Strain = np.empty((ninc), dtype=float)
+        Stress = np.empty((ninc), dtype=float)
+        Strain_layers = np.empty((ninc, nlayer), dtype=float)
+        Stress_layers = np.empty((ninc, nlayer), dtype=float)
+        S_layers = np.zeros((ninc, nlayer), dtype=int)
+        A_layers = np.zeros((ninc, nlayer), dtype=int)
+        Drive_Ux = np.zeros((ninc, Drive_x.size), dtype=float)
+        Drive_Fx = np.zeros((ninc, Drive_x.size), dtype=float)
 
         for inc in tqdm.tqdm(incs):
 
             ubar = data["/drive/ubar/{0:d}".format(inc)][...]
-            system.layerSetUbar(ubar, Drive)
+            system.layerSetTargetUbar(ubar, Drive)
 
             u = data["/disp/{0:d}".format(inc)][...]
             system.setU(u)
 
-            Drive_Ux[inc, :] = ubar[:, 0]
-            Drive_Fx[inc, :] = system.fdrivespring()[:, 0]
+            Drive_Ux[inc, :] = ubar[Drive_x, 0] / Height[Drive_x]
+            Drive_Fx[inc, :] = system.layerFdrive()[Drive_x, 0] / kdrive
             Sig = system.Sig() / sig0
             Eps = system.Eps() / eps0
             idx = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, N)
 
-            for i in range(nlayers):
+            for i in range(nlayer):
                 e = system.layerElements(i)
+                E = np.average(Eps[e, ...], weights=dV[e, ...], axis=(0, 1))
                 S = np.average(Sig[e, ...], weights=dV[e, ...], axis=(0, 1))
+                Strain_layers[inc, i] = GMat.Epsd(E)
                 Stress_layers[inc, i] = GMat.Sigd(S)
 
             S_layers[inc, is_plastic] = np.sum(idx - idx_n, axis=1)
             A_layers[inc, is_plastic] = np.sum(idx != idx_n, axis=1)
             Strain[inc] = GMat.Epsd(np.average(Eps, weights=dV, axis=(0, 1)))
+            Stress[inc] = GMat.Sigd(np.average(Sig, weights=dV, axis=(0, 1)))
 
             idx_n = np.array(idx, copy=True)
 
@@ -125,35 +136,56 @@ for ifile, file in enumerate(tqdm.tqdm(args.files)):
         output[key] = Drive
         output[key].attrs["desc"] = "Drive per layer and direction"
 
+        key = "/file/{0:s}/drive/height".format(os.path.normpath(file))
+        output[key] = Height
+        output[key].attrs["desc"] = "Height of the loading frame of each layer"
+
+        key = "/file/{0:s}/drive/delta_gamma".format(os.path.normpath(file))
+        output[key] = Dgamma / eps0
+        output[key].attrs["desc"] = "Applied shear [ninc], in units of eps0"
+
         key = "/file/{0:s}/drive/ux".format(os.path.normpath(file))
         output[key] = Drive_Ux
-        output[key].attrs["desc"] = "Drive position in x-direction [ninc, nlayers]"
+        output[key].attrs["desc"] = \
+            "Drive position in x-direction on driven layers divided by layer height [ninc, ndrive]"
 
         key = "/file/{0:s}/drive/fx".format(os.path.normpath(file))
         output[key] = Drive_Fx
-        output[key].attrs["desc"] = "Drive force in x-direction [ninc, nlayers]"
+        output[key].attrs["desc"] = "Drive force in x-direction on driven layers [ninc, nlayer]"
 
         key = "/file/{0:s}/macroscopic/eps".format(os.path.normpath(file))
         output[key] = Strain
         output[key].attrs["desc"] = "Macroscopic strain per increment [ninc], in units of eps0"
 
+        key = "/file/{0:s}/macroscopic/sig".format(os.path.normpath(file))
+        output[key] = Stress
+        output[key].attrs["desc"] = "Macroscopic stress per increment [ninc], in units of sig0"
+
+        key = "/file/{0:s}/layers/eps".format(os.path.normpath(file))
+        output[key] = Strain_layers
+        output[key].attrs["desc"] = "Average strain per layer [ninc, nlayer], in units of eps0"
+
         key = "/file/{0:s}/layers/sig".format(os.path.normpath(file))
         output[key] = Stress_layers
-        output[key].attrs["desc"] = "Average stress per layer [ninc, nlayers], in units of sig0"
+        output[key].attrs["desc"] = "Average stress per layer [ninc, nlayer], in units of sig0"
 
         key = "/file/{0:s}/layers/S".format(os.path.normpath(file))
         output[key] = S_layers
-        output[key].attrs["desc"] = "Total number of yield events per layer [ninc, nlayers]"
+        output[key].attrs["desc"] = "Total number of yield events per layer [ninc, nlayer]"
 
         key = "/file/{0:s}/layers/A".format(os.path.normpath(file))
         output[key] = A_layers
-        output[key].attrs["desc"] = "Total number of blocks that yields per layer [ninc, nlayers]"
+        output[key].attrs["desc"] = "Total number of blocks that yields per layer [ninc, nlayer]"
 
 with h5py.File(args.output, "a") as output:
 
     key = "/normalisation/N"
     output[key] = N
     output[key].attrs["desc"] = "Number of blocks along each plastic layer"
+
+    key = "/normalisation/kdrive"
+    output[key] = kdrive
+    output[key].attrs["desc"] = "Driving spring stiffness"
 
     key = "/normalisation/sig0"
     output[key] = sig0
