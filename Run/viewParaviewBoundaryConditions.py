@@ -1,12 +1,11 @@
 import argparse
-import os
-import tqdm
+import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
+import GooseFEM
 import h5py
 import numpy as np
+import os
 import prrng
-import GooseFEM as gf
-import GMatElastoPlasticQPot.Cartesian2d as gmat
-import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
+import tqdm
 import XDMFWrite_h5py as xh
 
 parser = argparse.ArgumentParser()
@@ -43,20 +42,14 @@ for file in tqdm.tqdm(args.files):
         with h5py.File(file, "r") as data:
 
             layers = data["/layers/stored"][...]
-            elemmap = []
-            nodemap = []
-
-            for layer in layers:
-                elemmap += [data["/layers/{0:d}/elemmap".format(layer)][...]]
-                nodemap += [data["/layers/{0:d}/nodemap".format(layer)][...]]
 
             system = model.System(
                 data["/coor"][...],
                 data["/conn"][...],
                 data["/dofs"][...],
                 data["/iip"][...],
-                elemmap,
-                nodemap,
+                [data["/layers/{0:d}/elemmap".format(layer)][...] for layer in layers],
+                [data["/layers/{0:d}/nodemap".format(layer)][...] for layer in layers],
                 data["/layers/is_plastic"][...])
 
             system.setDriveStiffness(data["/drive/k"][...], data["/drive/symmetric"][...])

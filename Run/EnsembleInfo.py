@@ -1,19 +1,24 @@
+from setuptools_scm import get_version
 import argparse
-import os
-import tqdm
+import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
+import GMatElastoPlasticQPot.Cartesian2d as GMat
+import GooseFEM
 import h5py
 import numpy as np
+import os
 import prrng
-import GooseFEM as gf
-import GMatElastoPlasticQPot.Cartesian2d as gmat
-import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
+import tqdm
+
+basename = os.path.splitext(os.path.basename(__file__))[0]
 
 parser = argparse.ArgumentParser()
+parser.add_argument("-o", "--output", type=str, default=basename + ".h5")
 parser.add_argument("files", type=str, nargs="*")
-parser.add_argument("-o", "--output", type=str, default="EnsembleInfo.h5")
 args = parser.parse_args()
-assert np.all([os.path.isfile(file) for file in args.files])
+assert np.all([os.path.isfile(os.path.realpath(file)) for file in args.files])
 assert len(args.files) > 0
+filenames = [os.path.basename(file) for file in args.files]
+
 
 def read_epsy(data, N):
 
@@ -33,125 +38,167 @@ def read_epsy(data, N):
 
     return epsy
 
-with h5py.File(args.output, "w") as output:
 
-    for ifile, file in enumerate(tqdm.tqdm(args.files)):
+def initsystem(data):
 
-        with h5py.File(file, "r") as data:
+    layers = data["/layers/stored"][...]
 
-            is_plastic = data["/layers/is_plastic"][...]
-            layers = data["/layers/stored"][...]
-            nlayers = layers.size
-            elemmap = []
-            nodemap = []
+    system = model.System(
+        data["/coor"][...],
+        data["/conn"][...],
+        data["/dofs"][...],
+        data["/iip"][...],
+        [data["/layers/{0:d}/elemmap".format(layer)][...] for layer in layers],
+        [data["/layers/{0:d}/nodemap".format(layer)][...] for layer in layers],
+        data["/layers/is_plastic"][...])
 
-            for layer in layers:
-                elemmap += [data["/layers/{0:d}/elemmap".format(layer)][...]]
-                nodemap += [data["/layers/{0:d}/nodemap".format(layer)][...]]
+    system.setDriveStiffness(data["/drive/k"][...], data["/drive/symmetric"][...])
+    system.setMassMatrix(data["/rho"][...])
+    system.setDampingMatrix(data["/damping/alpha"][...])
+    system.setElastic(data["/elastic/K"][...], data["/elastic/G"][...])
+    system.setPlastic(data["/cusp/K"][...], data["/cusp/G"][...], read_epsy(data, system.plastic().size))
+    system.setDt(data["/run/dt"][...])
 
-            # todo: remove fallback
-            if "/meta/N" in data:
-                N = data["/meta/N"][...]
-            else:
-                for i in range(nlayers):
-                    if is_plastic[i]:
-                        N = elemmap[i].size
-                        break
+    return system
 
-            system = model.System(
-                data["/coor"][...],
-                data["/conn"][...],
-                data["/dofs"][...],
-                data["/iip"][...],
-                elemmap,
-                nodemap,
-                is_plastic)
 
-            K_elas = data["/elastic/K"][...]
-            G_elas = data["/elastic/G"][...]
-            K_plas = data["/cusp/K"][...]
-            G_plas = data["/cusp/G"][...]
+for ifile, file in enumerate(tqdm.tqdm(args.files)):
 
-            if ifile == 0:
+    with h5py.File(file, "r") as data:
 
-                # todo: remove fallback
-                if "/cusp/epsy/sig0" in data:
-                    sig0 = data["/cusp/epsy/sig0"][...]
-                else:
-                    K0 = K_elas.ravel()[0]
-                    G0 = G_elas.ravel()[0]
-                    eps0 = data["/cusp/epsy/eps0"][...]
-                    sig0 = 2.0 * G0 * eps0 # because of definition of the equivalent strains
-                    assert np.allclose(K0, K_elas)
-                    assert np.allclose(G0, G_elas)
-                    assert np.allclose(K0, K_plas)
-                    assert np.allclose(G0, G_plas)
-
-            system.setDriveStiffness(data["/drive/k"][...], data["/drive/symmetric"][...])
-            system.setMassMatrix(data["/rho"][...])
-            system.setDampingMatrix(data["/damping/alpha"][...])
-            system.setElastic(K_elas, G_elas)
-            system.setPlastic(K_plas, G_plas, read_epsy(data, system.plastic().size))
-            system.setDt(data["/run/dt"][...])
-
-            dV = system.quad().AsTensor(2, system.quad().dV())
-
-            incs = data["/stored"][...]
-            ninc = incs.size
-            idx_n = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, N)
-
-            Strain = np.empty((ninc), dtype=float)
-            Stress_layers = np.empty((ninc, nlayers), dtype=float)
-            S_layers = np.zeros((ninc, nlayers), dtype=int)
-            A_layers = np.zeros((ninc, nlayers), dtype=int)
-
-            for inc in tqdm.tqdm(incs):
-
-                system.layerSetUbar(
-                    data["/drive/ubar/{0:d}".format(inc)][...],
-                    data["/drive/drive"][...])
-
-                u = data["/disp/{0:d}".format(inc)][...]
-                system.setU(u)
-
-                Sig = system.Sig() / sig0
-                Eps = system.Eps() / eps0
-                idx = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, N)
-
-                for i in range(nlayers):
-                    Stress_layers[inc, i] = gmat.Sigd(np.average(Sig[elemmap[i], ...], weights=dV[elemmap[i], ...], axis=(0, 1)))
-
-                S_layers[inc, is_plastic] = np.sum(idx - idx_n, axis=1)
-                A_layers[inc, is_plastic] = np.sum(idx != idx_n, axis=1)
-                Strain[inc] = gmat.Epsd(np.average(Eps, weights=dV, axis=(0, 1)))
-
-                idx_n = np.array(idx, copy=True)
+        system = initsystem(data)
+        nlayer = system.nlayer()
+        dV = system.quad().AsTensor(2, system.quad().dV())
 
         if ifile == 0:
-            key = "/normalisation/N"
-            output[key] = N
-            output[key].attrs["desc"] = "Number of blocks along each plastic layer"
+            N = data["/meta/normalisation/N"][...]
+            eps0 = data["/meta/normalisation/eps"][...]
+            sig0 = data["/meta/normalisation/sig"][...]
+            dt = data["/run/dt"][...]
+            kdrive = data["/drive/k"][...]
+        else:
+            assert np.isclose(N, data["/meta/normalisation/N"][...])
+            assert np.isclose(eps0, data["/meta/normalisation/eps"][...])
+            assert np.isclose(sig0, data["/meta/normalisation/sig"][...])
+            assert np.isclose(dt, data["/run/dt"][...])
+            assert np.isclose(kdrive, data["/drive/k"][...])
 
-            key = "/normalisation/sig0"
-            output[key] = sig0
-            output[key].attrs["desc"] = "Unit of stress"
+        incs = data["/stored"][...]
+        ninc = incs.size
+        idx_n = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, N)
 
-            key = "/normalisation/eps0"
-            output[key] = eps0
-            output[key].attrs["desc"] = "Unit of strain"
+        is_plastic = data["/layers/is_plastic"][...]
+        Drive = data["/drive/drive"][...]
+        Drive_x =  np.argwhere(Drive[:, 0]).ravel()
+        Height = data["/drive/height"][...]
+        Dgamma = data["/drive/delta_gamma"][...][incs]
 
-        key = "/raw/{0:s}/macroscopic/eps".format(os.path.normpath(file))
+        Strain = np.empty((ninc), dtype=float)
+        Stress = np.empty((ninc), dtype=float)
+        Strain_layers = np.empty((ninc, nlayer), dtype=float)
+        Stress_layers = np.empty((ninc, nlayer), dtype=float)
+        S_layers = np.zeros((ninc, nlayer), dtype=int)
+        A_layers = np.zeros((ninc, nlayer), dtype=int)
+        Drive_Ux = np.zeros((ninc, Drive_x.size), dtype=float)
+        Drive_Fx = np.zeros((ninc, Drive_x.size), dtype=float)
+
+        for inc in tqdm.tqdm(incs):
+
+            ubar = data["/drive/ubar/{0:d}".format(inc)][...]
+            system.layerSetTargetUbar(ubar, Drive)
+
+            u = data["/disp/{0:d}".format(inc)][...]
+            system.setU(u)
+
+            Drive_Ux[inc, :] = ubar[Drive_x, 0] / Height[Drive_x]
+            Drive_Fx[inc, :] = system.layerFdrive()[Drive_x, 0] / kdrive
+            Sig = system.Sig() / sig0
+            Eps = system.Eps() / eps0
+            idx = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, N)
+
+            for i in range(nlayer):
+                e = system.layerElements(i)
+                E = np.average(Eps[e, ...], weights=dV[e, ...], axis=(0, 1))
+                S = np.average(Sig[e, ...], weights=dV[e, ...], axis=(0, 1))
+                Strain_layers[inc, i] = GMat.Epsd(E)
+                Stress_layers[inc, i] = GMat.Sigd(S)
+
+            S_layers[inc, is_plastic] = np.sum(idx - idx_n, axis=1)
+            A_layers[inc, is_plastic] = np.sum(idx != idx_n, axis=1)
+            Strain[inc] = GMat.Epsd(np.average(Eps, weights=dV, axis=(0, 1)))
+            Stress[inc] = GMat.Sigd(np.average(Sig, weights=dV, axis=(0, 1)))
+
+            idx_n = np.array(idx, copy=True)
+
+    with h5py.File(args.output, "a" if ifile > 0 else "w") as output:
+
+        key = "/file/{0:s}/drive/drive".format(os.path.normpath(file))
+        output[key] = Drive
+        output[key].attrs["desc"] = "Drive per layer and direction"
+
+        key = "/file/{0:s}/drive/height".format(os.path.normpath(file))
+        output[key] = Height
+        output[key].attrs["desc"] = "Height of the loading frame of each layer"
+
+        key = "/file/{0:s}/drive/delta_gamma".format(os.path.normpath(file))
+        output[key] = Dgamma / eps0
+        output[key].attrs["desc"] = "Applied shear [ninc], in units of eps0"
+
+        key = "/file/{0:s}/drive/ux".format(os.path.normpath(file))
+        output[key] = Drive_Ux
+        output[key].attrs["desc"] = \
+            "Drive position in x-direction on driven layers divided by layer height [ninc, ndrive]"
+
+        key = "/file/{0:s}/drive/fx".format(os.path.normpath(file))
+        output[key] = Drive_Fx
+        output[key].attrs["desc"] = "Drive force in x-direction on driven layers [ninc, nlayer]"
+
+        key = "/file/{0:s}/macroscopic/eps".format(os.path.normpath(file))
         output[key] = Strain
         output[key].attrs["desc"] = "Macroscopic strain per increment [ninc], in units of eps0"
 
-        key = "/raw/{0:s}/layers/sig".format(os.path.normpath(file))
+        key = "/file/{0:s}/macroscopic/sig".format(os.path.normpath(file))
+        output[key] = Stress
+        output[key].attrs["desc"] = "Macroscopic stress per increment [ninc], in units of sig0"
+
+        key = "/file/{0:s}/layers/eps".format(os.path.normpath(file))
+        output[key] = Strain_layers
+        output[key].attrs["desc"] = "Average strain per layer [ninc, nlayer], in units of eps0"
+
+        key = "/file/{0:s}/layers/sig".format(os.path.normpath(file))
         output[key] = Stress_layers
-        output[key].attrs["desc"] = "Average stress per layer [ninc, nlayers], in units of sig0"
+        output[key].attrs["desc"] = "Average stress per layer [ninc, nlayer], in units of sig0"
 
-        key = "/raw/{0:s}/layers/S".format(os.path.normpath(file))
+        key = "/file/{0:s}/layers/S".format(os.path.normpath(file))
         output[key] = S_layers
-        output[key].attrs["desc"] = "Total number of yield events per layer [ninc, nlayers]"
+        output[key].attrs["desc"] = "Total number of yield events per layer [ninc, nlayer]"
 
-        key = "/raw/{0:s}/layers/A".format(os.path.normpath(file))
+        key = "/file/{0:s}/layers/A".format(os.path.normpath(file))
         output[key] = A_layers
-        output[key].attrs["desc"] = "Total number of blocks that yields per layer [ninc, nlayers]"
+        output[key].attrs["desc"] = "Total number of blocks that yields per layer [ninc, nlayer]"
+
+with h5py.File(args.output, "a") as output:
+
+    key = "/normalisation/N"
+    output[key] = N
+    output[key].attrs["desc"] = "Number of blocks along each plastic layer"
+
+    key = "/normalisation/kdrive"
+    output[key] = kdrive
+    output[key].attrs["desc"] = "Driving spring stiffness"
+
+    key = "/normalisation/sig0"
+    output[key] = sig0
+    output[key].attrs["desc"] = "Unit of stress"
+
+    key = "/normalisation/eps0"
+    output[key] = eps0
+    output[key].attrs["desc"] = "Unit of strain"
+
+    key = "/normalisation/dt"
+    output[key] = dt
+    output[key].attrs["desc"] = "Time step"
+
+    key = "/meta/Run/EnsembleInfo.py"
+    output[key] = get_version(root=os.path.join(os.path.dirname(os.path.realpath(__file__)), '..'))
+    output[key].attrs["desc"] = "Version at which this file was created"
