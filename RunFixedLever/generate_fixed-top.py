@@ -1,11 +1,12 @@
-import h5py
-import numpy as np
 import GooseFEM
-import prrng
+import h5py
+import itertools
+import numpy as np
 import os
-from setuptools_scm import get_version
+import prrng
+import setuptools_scm
 
-version = get_version(root=os.path.join(os.path.dirname(__file__), '..'))
+myversion = setuptools_scm.get_version(root=os.path.join(os.path.dirname(__file__), '..'))
 
 # ==================================================================================================
 
@@ -215,7 +216,7 @@ class BottomLayerElastic(MyMesh):
 
 # ==================================================================================================
 
-def generate(version, filename, nplates, seed, rid, k_drive, symmetric):
+def generate(myversion, filename, nplates, seed, rid, k_drive, symmetric):
 
     N = 3 ** 6
     M = int(N / 4)
@@ -300,7 +301,7 @@ def generate(version, filename, nplates, seed, rid, k_drive, symmetric):
     # epsy[right: N, 0] *= init_factor
     # epsy = np.cumsum(epsy, axis=1)
 
-    delta_gamma = 0.01 * eps0 * np.ones(1000)
+    delta_gamma = 0.005 * eps0 * np.ones(2000)
     delta_gamma[0] = 0
 
     c = 1.0
@@ -427,8 +428,8 @@ def generate(version, filename, nplates, seed, rid, k_drive, symmetric):
         data[key] = seed
         data[key].attrs["desc"] = "Basic seed == 'unique' identifier"
 
-        key = "/meta/Run/generate.py"
-        data[key] = version
+        key = "/meta/RunFixedLever/generate.py"
+        data[key] = myversion
         data[key].attrs["desc"] = "Version when generating"
 
         elemmap = stitch.elemmap()
@@ -475,15 +476,7 @@ N = 3 ** 6
 seed = 0
 max_plates = 100
 
-for rid in range(3):
-
-    for symmetric in [1, 0]:
-
-        for nplates in [2, 3, 4, 5]:
-
-            for k_plate in [0.001, 0.01, 0.1]:
-
-                generate(version, "id={0:03d}_nplates={1:d}_kplate={2:.0e}_symmetric={3:d}.h5".format(rid, nplates, k_plate, symmetric), nplates, seed, rid, k_plate, symmetric)
-
+for rid, symmetric, nplates, k_plate in itertools.product(range(10), [1], [2, 3, 4, 5], [0.001]):
+    generate(myversion, "id={0:03d}_nplates={1:d}_kplate={2:.0e}_symmetric={3:d}.h5".format(rid, nplates, k_plate, symmetric), nplates, seed, rid, k_plate, symmetric)
     seed += N * (max_plates - 1)
 

@@ -19,25 +19,33 @@ namespace FQF = FrictionQPotFEM::UniformSingleLayer2d;
 namespace GM = GMatElastoPlasticQPot::Cartesian2d;
 
 template <class T>
-void DumpWithDescription(
+void CheckOrDumpWithDescription(
     H5Easy::File& file,
     const std::string& path,
     const T& data,
     const std::string& description)
 {
+    if (file.exist(path)) {
+        T ret = H5Easy::load<T>(file, path);
+        if (ret != data) {
+            throw std::runtime_error("Mismatch: " + path);
+        }
+        return;
+    }
+
     H5Easy::dump(file, path, data);
     H5Easy::dumpAttribute(file, path, "desc", description);
 }
 
 
 static const char USAGE[] =
-    R"(RunFixedBoundary
+    R"(RunFixedTop
 
 Description:
-    RunFixedBoundary simulation until maximum strain.
+    RunFixedTop simulation until maximum strain.
 
 Usage:
-    RunFixedBoundary [options] <data.hdf5>
+    RunFixedTop [options] <data.hdf5>
 
 Options:
     -h, --help      Show help.
@@ -114,10 +122,14 @@ public:
 
     void run()
     {
-        if (m_file.exist("/meta/RunFixedBoundary/version")) {
-            DumpWithDescription(m_file, "/meta/RunFixedBoundary/version", std::string(MYVERSION),
-                "Code version at compile-time.");
-        }
+        auto deps = FQF::version_dependencies();
+        deps.push_back(prrng::version());
+
+        CheckOrDumpWithDescription(m_file, "/meta/RunFixedBoundary/version", std::string(MYVERSION),
+            "Code version at compile-time.");
+
+        CheckOrDumpWithDescription(m_file, "/meta/RunFixedBoundary/version_dependencies", deps,
+            "Library versions at compile-time.");
 
         if (m_file.exist("/meta/RunFixedBoundary/completed")) {
             fmt::print("Marked completed, skipping\n");
@@ -155,7 +167,7 @@ public:
         for (++m_inc;; ++m_inc) {
 
             if (!m_material_plas.checkYieldBoundRight(5)) {
-                DumpWithDescription(m_file, "/meta/RunFixedBoundary/completed", 1,
+                CheckOrDumpWithDescription(m_file, "/meta/RunFixedBoundary/completed", 1,
                     "Signal that this program finished.");
                 fmt::print("'{0:s}': Completed\n", m_file.getName());
                 return;
@@ -164,7 +176,7 @@ public:
             this->addSimpleShearEventDriven(m_deps_kick, m_kick);
 
             if (!m_material_plas.checkYieldBoundRight(5)) {
-                DumpWithDescription(m_file, "/meta/RunFixedBoundary/completed", 1,
+                CheckOrDumpWithDescription(m_file, "/meta/RunFixedBoundary/completed", 1,
                     "Signal that this program finished.");
                 fmt::print("'{0:s}': Completed\n", m_file.getName());
                 return;
@@ -180,7 +192,7 @@ public:
                     }
 
                     if (!m_material_plas.checkYieldBoundRight(5)) {
-                        DumpWithDescription(m_file, "/meta/RunFixedBoundary/completed", 1,
+                        CheckOrDumpWithDescription(m_file, "/meta/RunFixedBoundary/completed", 1,
                             "Signal that this program finished.");
                         fmt::print("'{0:s}': Completed\n", m_file.getName());
                         return;

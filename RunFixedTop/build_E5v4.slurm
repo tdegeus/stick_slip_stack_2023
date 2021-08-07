@@ -8,6 +8,10 @@
 #SBATCH --account pcsl
 #SBATCH --partition build
 
+# print jobid
+echo "SLURM_JOBID = ${SLURM_JOBID}"
+echo ""
+
 # change current directory to the location of the sbatch command
 cd "${SLURM_SUBMIT_DIR}"
 
@@ -32,11 +36,11 @@ if [ -d "${mydir}" ]; then
     rm -r "${mydir}"
 fi
 
-cmake -B"${mydir}" -DCMAKE_INSTALL_PREFIX:PATH="${CONDA_PREFIX}" 
+cmake -B"${mydir}" -DCMAKE_INSTALL_PREFIX:PATH="${CONDA_PREFIX}"
 cd "${mydir}"
 echo "*" > .gitignore
 make
 make install
 cd ..
 rm -r "${mydir}"
-  
+

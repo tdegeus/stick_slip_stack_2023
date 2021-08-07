@@ -25,10 +25,20 @@ set(HIGHFIVE_USE_XTENSOR 1)
 find_package(FrictionQPotFEM REQUIRED)
 find_package(prrng REQUIRED)
 find_package(xtensor REQUIRED)
+find_package(xsimd REQUIRED)
 find_package(HighFive REQUIRED)
 find_package(docopt REQUIRED)
 find_package(fmt REQUIRED)
 find_package(cpppath REQUIRED)
+
+message(STATUS "FrictionQPotFEM v" ${FrictionQPotFEM_VERSION})
+message(STATUS "prrng v" ${prrng_VERSION})
+message(STATUS "xtensor v" ${xtensor_VERSION})
+message(STATUS "xsimd v" ${xsimd_VERSION})
+message(STATUS "HighFive v" ${HighFive_VERSION})
+message(STATUS "docopt v" ${docopt_VERSION})
+message(STATUS "fmt v" ${fmt_VERSION})
+message(STATUS "cpppath v" ${cpppath_VERSION})
 
 target_link_libraries(${PROJECT_NAME}
     FrictionQPotFEM

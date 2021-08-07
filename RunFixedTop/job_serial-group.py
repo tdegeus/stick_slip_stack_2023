@@ -1,17 +1,20 @@
-import os
-import subprocess
-import h5py
-import numpy as np
-import GooseSLURM
 import argparse
+import GooseSLURM
+import numpy as np
+import os
 
 parser = argparse.ArgumentParser()
 parser.add_argument('files', nargs='*', type=str)
 parser.add_argument('-n', '--group', nargs=1, type=int, default=1)
+parser.add_argument('-w', '--walltime', nargs=1, type=str, default='24h')
 args = parser.parse_args()
 assert np.all([os.path.isfile(file) for file in args.files])
 
 slurm = '''
+# print jobid
+echo "SLURM_JOBID = ${{SLURM_JOBID}}"
+echo ""
+
 # for safety set the number of cores
 export OMP_NUM_THREADS=1
 
@@ -32,7 +35,7 @@ fi
 {0:s}
 '''
 
-commands = ['stdbuf -o0 -e0 RunFixedBoundary {0:s}'.format(file) for file in args.files]
+commands = ['stdbuf -o0 -e0 RunFixedTop {0:s}'.format(file) for file in args.files]
 
 args.group = 1
 ngroup = int(np.ceil(len(commands) / args.group))
@@ -44,7 +47,7 @@ for group in range(ngroup):
     command = '\n'.join(c)
     command = slurm.format(command)
 
-    jobname = ('RunFixedBoundary-{0:0' + fmt + 'd}').format(group)
+    jobname = ('RunFixedTop-{0:0' + fmt + 'd}').format(group)
 
     sbatch = {
         'job-name': 'layers-' + jobname,
@@ -52,7 +55,7 @@ for group in range(ngroup):
         'nodes': 1,
         'ntasks': 1,
         'cpus-per-task': 1,
-        'time': '24h',
+        'time': args.walltime,
         'account': 'flexlab-frictionlayers',
         'partition': 'serial',
     }

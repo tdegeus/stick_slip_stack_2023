@@ -28,7 +28,7 @@ void CheckOrDumpWithDescription(
     if (file.exist(path)) {
         T ret = H5Easy::load<T>(file, path);
         if (ret != data) {
-            throw std::runtime_error("Version mismatch");
+            throw std::runtime_error("Mismatch: " + path);
         }
         return;
     }
@@ -39,13 +39,13 @@ void CheckOrDumpWithDescription(
 
 
 static const char USAGE[] =
-    R"(Run
+    R"(RunFixedLever
 
 Description:
-    Run simulation until maximum strain.
+    RunFixedLever simulation for shear history.
 
 Usage:
-    Run [options] <data.hdf5>
+    RunFixedLever [options] <data.hdf5>
 
 Options:
     -h, --help      Show help.
@@ -121,7 +121,8 @@ public:
             H5Easy::load<xt::xtensor<double, 1>>(m_file, "/cusp/G"),
             read_epsy(m_file, m_N));
 
-        this->setDriveStiffness(
+        this->layerSetTargetActive(H5Easy::load<xt::xtensor<bool, 2>>(m_file, "/drive/drive"));
+        this->layerSetDriveStiffness(
             H5Easy::load<double>(m_file, "/drive/k"),
             static_cast<bool>(H5Easy::load<int>(m_file, "/drive/symmetric")));
     }
@@ -133,18 +134,17 @@ public:
         auto deps = FQF::version_dependencies();
         deps.push_back(prrng::version());
 
-        CheckOrDumpWithDescription(m_file, "/meta/Run/version", std::string(MYVERSION),
+        CheckOrDumpWithDescription(m_file, "/meta/RunFixedLever/version", std::string(MYVERSION),
             "Code version at compile-time.");
 
-        CheckOrDumpWithDescription(m_file, "/meta/Run/version_dependencies", deps,
+        CheckOrDumpWithDescription(m_file, "/meta/RunFixedLever/version_dependencies", deps,
             "Library versions at compile-time.");
 
-        if (m_file.exist("/meta/Run/completed")) {
+        if (m_file.exist("/meta/RunFixedLever/completed")) {
             fmt::print("Marked completed, skipping\n");
             return;
         }
 
-        auto drive = H5Easy::load<xt::xtensor<bool, 2>>(m_file, "/drive/drive");
         auto height = H5Easy::load<xt::xtensor<double, 1>>(m_file, "/drive/height");
         auto dgamma = H5Easy::load<xt::xtensor<double, 1>>(m_file, "/drive/delta_gamma");
         size_t ninc = dgamma.size();
@@ -155,8 +155,7 @@ public:
             inc = H5Easy::load<decltype(inc)>(m_file, "/stored", {i});
             m_t = H5Easy::load<decltype(m_t)>(m_file, "/t", {i});
             this->setU(H5Easy::load<decltype(m_u)>(m_file, fmt::format("/disp/{0:d}", inc)));
-            this->layerSetTargetUbar(H5Easy::load<decltype(m_layer_ubar_target)>(m_file,
-                fmt::format("/drive/ubar/{0:d}", inc)), drive);
+            this->layerSetTargetUbar(H5Easy::load<xt::xtensor<double, 2>>(m_file, fmt::format("/drive/ubar/{0:d}", inc)));
             fmt::print("'{0:s}': Loading, inc = {1:d}\n", m_file.getName(), inc);
         }
         else {
@@ -166,13 +165,13 @@ public:
             H5Easy::dump(m_file, fmt::format("/drive/ubar/{0:d}", inc), this->layerTargetUbar());
 
             H5Easy::dumpAttribute(m_file, "/stored", "desc",
-                std::string("List of increments in '/disp/{0:d}'"));
+                std::string("List of increments in '/disp/{0:d}' and '/drive/ubar/{0:d}'"));
 
             H5Easy::dumpAttribute(m_file, "/t", "desc",
                 std::string("Per increment: time at the end of the increment"));
 
             H5Easy::dumpAttribute(m_file, fmt::format("/disp/{0:d}", inc), "desc",
-                std::string("Displacement at the end of the increment."));
+                std::string("Displacement (at the end of the increment)."));
 
             H5Easy::dumpAttribute(m_file, fmt::format("/drive/ubar/{0:d}", inc), "desc",
                 std::string("Position of the loading frame of each layer."));
@@ -180,7 +179,7 @@ public:
 
         for (++inc; inc < ninc; ++inc) {
 
-            this->addAffineSimpleShear(dgamma(inc), drive, height);
+            this->layerTagetUbar_addAffineSimpleShear(dgamma(inc), height);
 
             size_t iiter = this->minimise();
 
@@ -192,7 +191,7 @@ public:
             H5Easy::dump(m_file, fmt::format("/drive/ubar/{0:d}", inc), this->layerTargetUbar());
         }
 
-        H5Easy::dump(m_file, "/meta/Run/completed", 1);
+        H5Easy::dump(m_file, "/meta/RunFixedLever/completed", 1);
     }
 };
 

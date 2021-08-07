@@ -1,11 +1,12 @@
-import h5py
-import numpy as np
 import GooseFEM
-import prrng
+import h5py
+import itertools
+import numpy as np
 import os
-from setuptools_scm import get_version
+import prrng
+import setuptools_scm
 
-version = get_version(root=os.path.join(os.path.dirname(__file__), '..'))
+myversion = setuptools_scm.get_version(root=os.path.join(os.path.dirname(__file__), '..'))
 
 # ==================================================================================================
 
@@ -215,7 +216,7 @@ class BottomLayerElastic(MyMesh):
 
 # ==================================================================================================
 
-def generate(version, filename, nplates, seed, rid):
+def generate(myversion, filename, nplates, seed, rid):
 
     N = 3 ** 6
     M = int(N / 4)
@@ -299,9 +300,6 @@ def generate(version, filename, nplates, seed, rid):
     # epsy[0: left, 0] *= init_factor
     # epsy[right: N, 0] *= init_factor
     # epsy = np.cumsum(epsy, axis=1)
-
-    delta_gamma = 0.01 * eps0 * np.ones(1000)
-    delta_gamma[0] = 0
 
     c = 1.0
     G = 1.0
@@ -427,8 +425,8 @@ def generate(version, filename, nplates, seed, rid):
         data[key] = seed
         data[key].attrs["desc"] = "Basic seed == 'unique' identifier"
 
-        key = "/meta/RunFixedBoundary/generate.py"
-        data[key] = version
+        key = "/meta/RunFixedTop/generate.py"
+        data[key] = myversion
         data[key].attrs["desc"] = "Version when generating"
 
         elemmap = stitch.elemmap()
@@ -452,11 +450,7 @@ N = 3 ** 6
 seed = 0
 max_plates = 100
 
-for rid in range(3):
-
-    for nplates in [2, 3, 4, 5]:
-
-        generate(version, "id={0:d}_nplates={1:d}.h5".format(rid, nplates), nplates, seed, rid)
-
+for rid, nplates in itertools.product(range(3), [2, 3, 4, 5]):
+    generate(myversion, "id={0:d}_nplates={1:d}.h5".format(rid, nplates), nplates, seed, rid)
     seed += N * (max_plates - 1)
 
