@@ -177,6 +177,10 @@ for ifile, file in enumerate(tqdm.tqdm(args.files)):
         output[key] = A_layers
         output[key].attrs["desc"] = "Total number of blocks that yields per layer [ninc, nlayer]"
 
+        key = "/file/{0:s}/layers/is_plastic".format(os.path.normpath(file))
+        output[key] = is_plastic
+        output[key].attrs["desc"] = "Per layer: plastic (True) or elastic (False)"
+
 with h5py.File(args.output, "a") as output:
 
     key = "/normalisation/N"

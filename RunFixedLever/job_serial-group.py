@@ -6,6 +6,7 @@ import os
 parser = argparse.ArgumentParser()
 parser.add_argument('files', nargs='*', type=str)
 parser.add_argument('-n', '--group', nargs=1, type=int, default=1)
+parser.add_argument('-w', '--walltime', nargs=1, type=str, default='24h')
 args = parser.parse_args()
 assert np.all([os.path.isfile(file) for file in args.files])
 
@@ -54,7 +55,7 @@ for group in range(ngroup):
         'nodes': 1,
         'ntasks': 1,
         'cpus-per-task': 1,
-        'time': '24h',
+        'time': args.walltime,
         'account': 'flexlab-frictionlayers',
         'partition': 'serial',
     }
