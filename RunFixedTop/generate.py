@@ -6,6 +6,8 @@ import os
 import prrng
 import setuptools_scm
 
+basename = os.path.split(os.path.dirname(os.path.abspath(__file__)))[1]
+genscript = os.path.splitext(os.path.basename(__file__))[0]
 myversion = setuptools_scm.get_version(root=os.path.join(os.path.dirname(__file__), '..'))
 
 # ==================================================================================================
@@ -425,7 +427,7 @@ def generate(myversion, filename, nplates, seed, rid):
         data[key] = seed
         data[key].attrs["desc"] = "Basic seed == 'unique' identifier"
 
-        key = "/meta/RunFixedTop/generate.py"
+        key = f"/meta/{basename}/{genscript}"
         data[key] = myversion
         data[key].attrs["desc"] = "Version when generating"
 

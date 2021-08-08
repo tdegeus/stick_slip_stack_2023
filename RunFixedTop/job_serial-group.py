@@ -3,12 +3,16 @@ import GooseSLURM
 import numpy as np
 import os
 
+basename = os.path.split(os.path.dirname(os.path.abspath(__file__)))[1]
+
 parser = argparse.ArgumentParser()
 parser.add_argument('files', nargs='*', type=str)
-parser.add_argument('-n', '--group', nargs=1, type=int, default=1)
-parser.add_argument('-w', '--walltime', nargs=1, type=str, default='24h')
+parser.add_argument('-n', '--group', type=int, default=1)
+parser.add_argument('-w', '--walltime', type=str, default='24h')
+parser.add_argument("-e", "--executable", type=str, default=basename)
 args = parser.parse_args()
 assert np.all([os.path.isfile(file) for file in args.files])
+executable = args.executable
 
 slurm = '''
 # print jobid
@@ -35,7 +39,7 @@ fi
 {0:s}
 '''
 
-commands = ['stdbuf -o0 -e0 RunFixedTop {0:s}'.format(file) for file in args.files]
+commands = ['stdbuf -o0 -e0 {0:s} {1:s}'.format(executable, file) for file in args.files]
 
 args.group = 1
 ngroup = int(np.ceil(len(commands) / args.group))
@@ -47,7 +51,7 @@ for group in range(ngroup):
     command = '\n'.join(c)
     command = slurm.format(command)
 
-    jobname = ('RunFixedTop-{0:0' + fmt + 'd}').format(group)
+    jobname = (f'{executable}-{{0:0' + fmt + 'd}').format(group)
 
     sbatch = {
         'job-name': 'layers-' + jobname,

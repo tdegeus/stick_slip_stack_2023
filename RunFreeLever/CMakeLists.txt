@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(RunFixedTop)
+project(RunFreeLever)
 
 option(ASSERT "Use assertions" OFF)
 option(DEBUG "Switch on all possible assertions" OFF)

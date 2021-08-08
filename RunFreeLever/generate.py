@@ -278,7 +278,7 @@ def generate(myversion, filename, nplates, seed, rid, k_drive, symmetric):
     dofs[bottom[-1], :] = dofs[bottom[0], :]
     dofs = GooseFEM.Mesh.renumber(dofs)
 
-    iip = np.concatenate((dofs[bottom[:-1], :].ravel(), dofs[top[:-1], :].ravel()))
+    iip = np.concatenate((dofs[bottom[:-1], :].ravel(), dofs[top[:-1], 1].ravel()))
 
     elastic = []
     plastic = []
@@ -303,7 +303,8 @@ def generate(myversion, filename, nplates, seed, rid, k_drive, symmetric):
     # epsy[right: N, 0] *= init_factor
     # epsy = np.cumsum(epsy, axis=1)
 
-    delta_gamma = 0.005 * eps0 * np.ones(2000)
+    Hlever = 1000.0
+    delta_gamma = 0.005 * eps0 * np.ones(2000) * Hlever
     delta_gamma[0] = 0
 
     c = 1.0
@@ -471,6 +472,10 @@ def generate(myversion, filename, nplates, seed, rid, k_drive, symmetric):
         key = "/drive/height"
         data[key] = Hi
         data[key].attrs["desc"] = "Height of the loading frame of each layer"
+
+        key = "/drive/H"
+        data[key] = Hlever
+        data[key].attrs["desc"] = "Height of the spring driving the lever"
 
 # ----------
 
