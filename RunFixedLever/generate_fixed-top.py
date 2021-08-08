@@ -272,11 +272,11 @@ def generate(myversion, filename, nplates, seed, rid, k_drive, symmetric):
 
     dofs = stitch.dofs()
     dofs[right, :] = dofs[left, :]
-    dofs[top[0], :] = dofs[top[-1], :]
-    dofs[bottom[0], :] = dofs[bottom[-1], :]
+    dofs[top[-1], :] = dofs[top[0], :]
+    dofs[bottom[-1], :] = dofs[bottom[0], :]
     dofs = GooseFEM.Mesh.renumber(dofs)
 
-    iip = np.concatenate((dofs[bottom, :].ravel(), dofs[top, :].ravel()))
+    iip = np.concatenate((dofs[bottom[:-1], :].ravel(), dofs[top[:-1], :].ravel()))
 
     elastic = []
     plastic = []
