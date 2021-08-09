@@ -304,7 +304,7 @@ def generate(myversion, filename, nplates, seed, rid, k_drive, symmetric):
     # epsy = np.cumsum(epsy, axis=1)
 
     Hlever = 1000.0
-    delta_gamma = 0.005 * eps0 * np.ones(2000) * Hlever / k_drive
+    delta_gamma = 0.005 * eps0 * np.ones(2000) * Hlever
     delta_gamma[0] = 0
 
     c = 1.0

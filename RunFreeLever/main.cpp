@@ -150,6 +150,7 @@ public:
 
         auto H = H5Easy::load<double>(m_file, "/drive/H");
         auto dgamma = H5Easy::load<xt::xtensor<double, 1>>(m_file, "/drive/delta_gamma");
+        auto gamma = xt::cumsum(dgamma);
         size_t ninc = dgamma.size();
         size_t inc = 0;
 
@@ -182,7 +183,7 @@ public:
 
         for (++inc; inc < ninc; ++inc) {
 
-            this->setLeverTarget(H * dgamma(inc));
+            this->setLeverTarget(H * gamma(inc));
 
             size_t iiter = this->minimise();
 
