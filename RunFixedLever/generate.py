@@ -6,9 +6,9 @@ import os
 import prrng
 import setuptools_scm
 
-basename = os.path.split(os.path.dirname(os.path.abspath(__file__)))[1]
+basename = os.path.split(os.path.dirname(os.path.realpath(__file__)))[1]
 genscript = os.path.splitext(os.path.basename(__file__))[0]
-myversion = setuptools_scm.get_version(root=os.path.join(os.path.dirname(__file__), '..'))
+myversion = setuptools_scm.get_version(root=os.path.join(os.path.dirname(os.path.realpath(__file__)), '..'))
 
 # ==================================================================================================
 

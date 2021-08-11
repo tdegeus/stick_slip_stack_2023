@@ -1,4 +1,3 @@
-from setuptools_scm import get_version
 import argparse
 import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
 import GMatElastoPlasticQPot.Cartesian2d as GMat
@@ -7,12 +6,15 @@ import h5py
 import numpy as np
 import os
 import prrng
+import setuptools_scm
 import tqdm
 
-basename = os.path.splitext(os.path.basename(__file__))[0]
+basename = os.path.split(os.path.dirname(os.path.realpath(__file__)))[1]
+genscript = os.path.splitext(os.path.basename(__file__))[0]
+myversion = setuptools_scm.get_version(root=os.path.join(os.path.dirname(os.path.realpath(__file__)), '..'))
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-o", "--output", type=str, default=basename + ".h5")
+parser.add_argument("-o", "--output", type=str, default=genscript + ".h5")
 parser.add_argument("files", type=str, nargs="*")
 args = parser.parse_args()
 assert np.all([os.path.isfile(os.path.realpath(file)) for file in args.files])
@@ -52,7 +54,8 @@ def initsystem(data):
         [data["/layers/{0:d}/nodemap".format(layer)][...] for layer in layers],
         data["/layers/is_plastic"][...])
 
-    system.setDriveStiffness(data["/drive/k"][...], data["/drive/symmetric"][...])
+    system.layerSetTargetActive(data["/drive/drive"][...])
+    system.layerSetDriveStiffness(data["/drive/k"][...], data["/drive/symmetric"][...])
     system.setMassMatrix(data["/rho"][...])
     system.setDampingMatrix(data["/damping/alpha"][...])
     system.setElastic(data["/elastic/K"][...], data["/elastic/G"][...])
@@ -105,7 +108,7 @@ for ifile, file in enumerate(tqdm.tqdm(args.files)):
         for inc in tqdm.tqdm(incs):
 
             ubar = data["/drive/ubar/{0:d}".format(inc)][...]
-            system.layerSetTargetUbar(ubar, Drive)
+            system.layerSetTargetUbar(ubar)
 
             u = data["/disp/{0:d}".format(inc)][...]
             system.setU(u)
@@ -203,6 +206,6 @@ with h5py.File(args.output, "a") as output:
     output[key] = dt
     output[key].attrs["desc"] = "Time step"
 
-    key = "/meta/Run/EnsembleInfo.py"
-    output[key] = get_version(root=os.path.join(os.path.dirname(os.path.realpath(__file__)), '..'))
+    key = f"/meta/{basename}/{genscript}.py"
+    output[key] = myversion
     output[key].attrs["desc"] = "Version at which this file was created"
