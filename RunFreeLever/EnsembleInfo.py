@@ -1,5 +1,5 @@
 import argparse
-import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
+import FrictionQPotFEM.UniformMultiLayerLeverDrive2d as model
 import GMatElastoPlasticQPot.Cartesian2d as GMat
 import GooseFEM
 import h5py
@@ -61,6 +61,7 @@ def initsystem(data):
     system.setDt(data["/run/dt"][...])
     system.layerSetTargetActive(data["/drive/drive"][...])
     system.layerSetDriveStiffness(data["/drive/k"][...], data["/drive/symmetric"][...])
+    system.setLeverProperties(data["/drive/H"][...], data["/drive/height"][...])
 
     return system
 
@@ -107,6 +108,10 @@ for ifile, file in enumerate(tqdm.tqdm(args.files)):
         Layers_Ux = np.zeros((ninc, nlayer), dtype=float)
         Layers_Tx = np.zeros((ninc, nlayer), dtype=float)
 
+        # todo: remove or replace
+        gamma = np.cumsum(data["/drive/delta_gamma"][...])
+        H = data["/drive/H"][...]
+
         for inc in tqdm.tqdm(incs):
 
             ubar = data["/drive/ubar/{0:d}".format(inc)][...]
@@ -114,6 +119,10 @@ for ifile, file in enumerate(tqdm.tqdm(args.files)):
 
             u = data["/disp/{0:d}".format(inc)][...]
             system.setU(u)
+
+            # todo: remove or replace
+            system.setLeverTarget(H * gamma[inc])
+            assert np.allclose(system.layerTargetUbar(), ubar)
 
             Drive_Ux[inc, :] = ubar[Drive_x, 0] / Height[Drive_x]
             Drive_Fx[inc, :] = system.layerFdrive()[Drive_x, 0] / kdrive

@@ -303,7 +303,7 @@ def generate(myversion, filename, nplates, seed, rid, k_drive, symmetric):
     # epsy[right: N, 0] *= init_factor
     # epsy = np.cumsum(epsy, axis=1)
 
-    delta_gamma = 0.005 * eps0 * np.ones(2000)
+    delta_gamma = 0.005 * eps0 * np.ones(2000) / k_drive
     delta_gamma[0] = 0
 
     c = 1.0

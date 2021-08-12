@@ -193,6 +193,8 @@ public:
             H5Easy::dump(m_file, "/t", m_t, {inc});
             H5Easy::dump(m_file, fmt::format("/disp/{0:d}", inc), m_u);
             H5Easy::dump(m_file, fmt::format("/drive/ubar/{0:d}", inc), this->layerTargetUbar());
+            H5Easy::dump(m_file, "/drive/lever/target", system.leverTarget(), {inc});
+            H5Easy::dump(m_file, "/drive/lever/position", system.leverPosition(), {inc});
         }
 
         H5Easy::dump(m_file, "/meta/RunFreeLever/completed", 1);
