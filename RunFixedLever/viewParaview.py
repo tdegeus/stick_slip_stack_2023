@@ -29,7 +29,7 @@ def read_epsy(data, N):
     generators = prrng.pcg32_array(initstate, initseq)
 
     epsy = generators.weibull([nchunk], k)
-    epsy *= (2.0 * eps0)
+    epsy *= 2.0 * eps0
     epsy += eps_offset
     epsy = np.cumsum(epsy, 1)
 
@@ -45,23 +45,29 @@ def initsystem(data):
         data["/conn"][...],
         data["/dofs"][...],
         data["/iip"][...],
-        [data["/layers/{0:d}/elemmap".format(layer)][...] for layer in layers],
-        [data["/layers/{0:d}/nodemap".format(layer)][...] for layer in layers],
-        data["/layers/is_plastic"][...])
+        [data[f"/layers/{layer:d}/elemmap"][...] for layer in layers],
+        [data[f"/layers/{layer:d}/nodemap"][...] for layer in layers],
+        data["/layers/is_plastic"][...],
+    )
 
     system.setMassMatrix(data["/rho"][...])
     system.setDampingMatrix(data["/damping/alpha"][...])
     system.setElastic(data["/elastic/K"][...], data["/elastic/G"][...])
-    system.setPlastic(data["/cusp/K"][...], data["/cusp/G"][...], read_epsy(data, system.plastic().size))
+    system.setPlastic(
+        data["/cusp/K"][...],
+        data["/cusp/G"][...],
+        read_epsy(data, system.plastic().size),
+    )
     system.setDt(data["/run/dt"][...])
     system.layerSetTargetActive(data["/drive/drive"][...])
     system.layerSetDriveStiffness(data["/drive/k"][...], data["/drive/symmetric"][...])
 
     return system
 
+
 for file in tqdm.tqdm(args.files):
 
-    outbasename = "{0:s}_{1:s}".format(args.prefix, os.path.splitext(file)[0])
+    outbasename = f"{args.prefix:s}_{os.path.splitext(file)[0]:s}"
 
     with h5py.File(outbasename + ".hdf5", "w") as output:
 
@@ -96,10 +102,9 @@ for file in tqdm.tqdm(args.files):
                     xh.Unstructured(output, "/coor", "/conn", "Quadrilateral"),
                     xh.Attribute(output, f"/disp/{inc:d}", "Node", name="Displacement"),
                     xh.Attribute(output, f"/sigd/{inc:d}", "Cell", name="Stress"),
-                    xh.Attribute(output, f"/epsp/{inc:d}", "Cell", name="Plastic strain"),
+                    xh.Attribute(
+                        output, f"/epsp/{inc:d}", "Cell", name="Plastic strain"
+                    ),
                 )
 
             xh.write(series, outbasename + ".xdmf")
-
-
-

@@ -7,11 +7,13 @@ import tqdm
 
 basename = os.path.split(os.path.dirname(os.path.realpath(__file__)))[1]
 
+
 def is_completed(file):
     with h5py.File(file, "r") as data:
         if f"/meta/{basename}/completed" in data:
             return data[f"/meta/{basename}/completed"][...]
     return False
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("files", nargs="*", type=str)

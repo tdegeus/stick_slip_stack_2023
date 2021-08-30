@@ -43,4 +43,3 @@ make
 make install
 cd ..
 rm -r "${mydir}"
-

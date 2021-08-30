@@ -31,7 +31,7 @@ def read_epsy(data, N):
     generators = prrng.pcg32_array(initstate, initseq)
 
     epsy = generators.weibull([nchunk], k)
-    epsy *= (2.0 * eps0)
+    epsy *= 2.0 * eps0
     epsy += eps_offset
     epsy = np.cumsum(epsy, 1)
 
@@ -64,25 +64,25 @@ with h5py.File(args.input, "r") as data:
             data["/dofs"][...],
             data["/iip"][...],
             data["/elastic/elem"][...],
-            data["/cusp/elem"][...])
+            data["/cusp/elem"][...],
+        )
 
         system.setMassMatrix(data["/rho"][...])
         system.setDampingMatrix(data["/damping/alpha"][...])
 
-        system.setElastic(
-            data["/elastic/K"][...],
-            data["/elastic/G"][...])
+        system.setElastic(data["/elastic/K"][...], data["/elastic/G"][...])
 
         system.setPlastic(
             data["/cusp/K"][...],
             data["/cusp/G"][...],
-            read_epsy(data, system.plastic().size))
+            read_epsy(data, system.plastic().size),
+        )
 
         system.setDt(data["/run/dt"][...])
 
         for inc in tqdm.tqdm(data["/stored"][...]):
 
-            u = data["/disp/{0:d}".format(inc)][...]
+            u = data[f"/disp/{inc:d}"][...]
             system.setU(u)
 
             if not checkbounds(system):
@@ -103,9 +103,9 @@ with h5py.File(args.input, "r") as data:
     rm = rm[rm >= ninc]
 
     for i in rm:
-        paths.remove("/disp/{0:d}".format(i))
+        paths.remove(f"/disp/{i:d}")
 
-    with h5py.File(args.output, 'w') as ret:
+    with h5py.File(args.output, "w") as ret:
 
         g5.copydatasets(data, ret, paths)
 
@@ -116,5 +116,3 @@ with h5py.File(args.input, "r") as data:
         for key in ["t"]:
             dset = ret.create_dataset(key, (ninc,), maxshape=(None,))
             dset[:] = data[key][...][:ninc]
-
-

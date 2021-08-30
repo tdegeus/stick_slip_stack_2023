@@ -15,6 +15,7 @@ args = parser.parse_args()
 assert np.all([os.path.isfile(file) for file in args.files])
 assert len(args.files) > 0
 
+
 def read_epsy(data, N):
 
     initstate = data["/cusp/epsy/initstate"][...]
@@ -27,15 +28,16 @@ def read_epsy(data, N):
     generators = prrng.pcg32_array(initstate, initseq)
 
     epsy = generators.weibull([nchunk], k)
-    epsy *= (2.0 * eps0)
+    epsy *= 2.0 * eps0
     epsy += eps_offset
     epsy = np.cumsum(epsy, 1)
 
     return epsy
 
+
 for file in tqdm.tqdm(args.files):
 
-    outbasename = "{0:s}_{1:s}".format(args.prefix, os.path.splitext(file)[0])
+    outbasename = f"{args.prefix:s}_{os.path.splitext(file)[0]:s}"
 
     with h5py.File(outbasename + ".hdf5", "w") as output:
 
@@ -48,22 +50,24 @@ for file in tqdm.tqdm(args.files):
                 data["/conn"][...],
                 data["/dofs"][...],
                 data["/iip"][...],
-                [data["/layers/{0:d}/elemmap".format(layer)][...] for layer in layers],
-                [data["/layers/{0:d}/nodemap".format(layer)][...] for layer in layers],
-                data["/layers/is_plastic"][...])
+                [data[f"/layers/{layer:d}/elemmap"][...] for layer in layers],
+                [data[f"/layers/{layer:d}/nodemap"][...] for layer in layers],
+                data["/layers/is_plastic"][...],
+            )
 
-            system.setDriveStiffness(data["/drive/k"][...], data["/drive/symmetric"][...])
+            system.setDriveStiffness(
+                data["/drive/k"][...], data["/drive/symmetric"][...]
+            )
             system.setMassMatrix(data["/rho"][...])
             system.setDampingMatrix(data["/damping/alpha"][...])
 
-            system.setElastic(
-                data["/elastic/K"][...],
-                data["/elastic/G"][...])
+            system.setElastic(data["/elastic/K"][...], data["/elastic/G"][...])
 
             system.setPlastic(
                 data["/cusp/K"][...],
                 data["/cusp/G"][...],
-                read_epsy(data, system.plastic().size))
+                read_epsy(data, system.plastic().size),
+            )
 
             system.setDt(data["/run/dt"][...])
 
@@ -103,7 +107,7 @@ for file in tqdm.tqdm(args.files):
                 nodevec = np.zeros(vector.shape_nodevec())
                 nodevec[system.layerNodes(i), :] = 1
 
-                key = "/layer/{0:d}/nodes".format(i)
+                key = f"/layer/{i:d}/nodes"
                 output[key] = xh.as3d(nodevec)
                 fields += xh.Attribute(output, key, "Node")
 
@@ -111,16 +115,16 @@ for file in tqdm.tqdm(args.files):
 
             for i in range(system.nlayers()):
 
-                el = np.zeros((system.conn().shape[0]))
+                el = np.zeros(system.conn().shape[0])
                 el[system.layerElements(i)] = 1
 
-                key = "/layer/{0:d}/elements".format(i)
+                key = f"/layer/{i:d}/elements"
                 output[key] = el
                 fields += xh.Attribute(output, key, "Cell")
 
             # is plastic
 
-            isplas0 = np.zeros((system.conn().shape[0]))
+            isplas0 = np.zeros(system.conn().shape[0])
             isplas1 = np.mean(system.material().isPlastic(), axis=1)
 
             for i in range(system.nlayers()):
@@ -140,6 +144,3 @@ for file in tqdm.tqdm(args.files):
 
             grid = xh.Grid(fields)
             xh.write(grid, outbasename + ".xdmf")
-
-
-

@@ -16,6 +16,7 @@ args = parser.parse_args()
 assert np.all([os.path.isfile(file) for file in args.files])
 assert len(args.files) > 0
 
+
 def read_epsy(data, N):
 
     initstate = data["/cusp/epsy/initstate"][...]
@@ -28,15 +29,16 @@ def read_epsy(data, N):
     generators = prrng.pcg32_array(initstate, initseq)
 
     epsy = generators.weibull([nchunk], k)
-    epsy *= (2.0 * eps0)
+    epsy *= 2.0 * eps0
     epsy += eps_offset
     epsy = np.cumsum(epsy, 1)
 
     return epsy
 
+
 for file in tqdm.tqdm(args.files):
 
-    outbasename = "{0:s}_{1:s}".format(args.prefix, os.path.splitext(file)[0])
+    outbasename = f"{args.prefix:s}_{os.path.splitext(file)[0]:s}"
 
     with h5py.File(outbasename + ".hdf5", "w") as output:
 
@@ -48,19 +50,19 @@ for file in tqdm.tqdm(args.files):
                 data["/dofs"][...],
                 data["/iip"][...],
                 data["/elastic/elem"][...],
-                data["/cusp/elem"][...])
+                data["/cusp/elem"][...],
+            )
 
             system.setMassMatrix(data["/rho"][...])
             system.setDampingMatrix(data["/damping/alpha"][...])
 
-            system.setElastic(
-                data["/elastic/K"][...],
-                data["/elastic/G"][...])
+            system.setElastic(data["/elastic/K"][...], data["/elastic/G"][...])
 
             system.setPlastic(
                 data["/cusp/K"][...],
                 data["/cusp/G"][...],
-                read_epsy(data, system.plastic().size))
+                read_epsy(data, system.plastic().size),
+            )
 
             system.setDt(data["/run/dt"][...])
 
@@ -74,20 +76,18 @@ for file in tqdm.tqdm(args.files):
 
             for inc in tqdm.tqdm(data["/stored"][...]):
 
-                u = data["/disp/{0:d}".format(inc)][...]
+                u = data[f"/disp/{inc:d}"][...]
                 system.setU(u)
 
                 Sig = GMat.Sigd(np.average(system.Sig() / sig0, weights=dV, axis=1))
 
-                output["/disp/{0:d}".format(inc)] = xh.as3d(u)
-                output["/sigd/{0:d}".format(inc)] = Sig
+                output[f"/disp/{inc:d}"] = xh.as3d(u)
+                output[f"/sigd/{inc:d}"] = Sig
 
                 series.push_back(
                     xh.Unstructured(output, "/coor", "/conn", "Quadrilateral"),
-                    xh.Attribute(output, "/disp/{0:d}".format(inc), "Node", name="Displacement"),
-                    xh.Attribute(output, "/sigd/{0:d}".format(inc), "Cell", name="Stress"))
+                    xh.Attribute(output, f"/disp/{inc:d}", "Node", name="Displacement"),
+                    xh.Attribute(output, f"/sigd/{inc:d}", "Cell", name="Stress"),
+                )
 
             xh.write(series, outbasename + ".xdmf")
-
-
-

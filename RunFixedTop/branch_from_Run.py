@@ -11,7 +11,7 @@ import QPot
 import tqdm
 from setuptools_scm import get_version
 
-version = get_version(root=os.path.join(os.path.dirname(__file__), '..'))
+version = get_version(root=os.path.join(os.path.dirname(__file__), ".."))
 
 parser = argparse.ArgumentParser()
 parser.add_argument("input", type=str, default="input file")
@@ -36,9 +36,9 @@ with h5py.File(args.input, "r") as data:
     paths.remove("/drive/height")
 
     for i in data["/stored"][...]:
-        paths.remove("/disp/{0:d}".format(i))
+        paths.remove(f"/disp/{i:d}")
 
-    with h5py.File(args.output, 'w') as ret:
+    with h5py.File(args.output, "w") as ret:
 
         g5.copydatasets(data, ret, paths)
 
@@ -51,7 +51,7 @@ with h5py.File(args.input, "r") as data:
         dset = ret.create_dataset("t", (1,), maxshape=(None,), dtype=float)
         dset[0] = data["t"][args.inc]
 
-        ret["/disp/{0:d}".format(0)] = data["/disp/{0:d}".format(args.inc)][...]
+        ret[f"/disp/{0:d}"] = data[f"/disp/{args.inc:d}"][...]
 
         key = "/meta/RunFixedBoundary/generate.py"
         ret[key] = version
