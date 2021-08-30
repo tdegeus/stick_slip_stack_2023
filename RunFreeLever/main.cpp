@@ -122,9 +122,11 @@ public:
             read_epsy(m_file, m_N));
 
         this->layerSetTargetActive(H5Easy::load<xt::xtensor<bool, 2>>(m_file, "/drive/drive"));
+
         this->layerSetDriveStiffness(
             H5Easy::load<double>(m_file, "/drive/k"),
             static_cast<bool>(H5Easy::load<int>(m_file, "/drive/symmetric")));
+
         this->setLeverProperties(
             H5Easy::load<double>(m_file, "/drive/H"),
             H5Easy::load<xt::xtensor<double, 1>>(m_file, "/drive/height"));
@@ -193,8 +195,8 @@ public:
             H5Easy::dump(m_file, "/t", m_t, {inc});
             H5Easy::dump(m_file, fmt::format("/disp/{0:d}", inc), m_u);
             H5Easy::dump(m_file, fmt::format("/drive/ubar/{0:d}", inc), this->layerTargetUbar());
-            H5Easy::dump(m_file, "/drive/lever/target", system.leverTarget(), {inc});
-            H5Easy::dump(m_file, "/drive/lever/position", system.leverPosition(), {inc});
+            H5Easy::dump(m_file, "/drive/lever/target", this->leverTarget(), {inc});
+            H5Easy::dump(m_file, "/drive/lever/position", this->leverPosition(), {inc});
         }
 
         H5Easy::dump(m_file, "/meta/RunFreeLever/completed", 1);

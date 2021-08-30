@@ -1,3 +1,4 @@
+import argparse
 import GooseFEM
 import h5py
 import itertools
@@ -5,10 +6,6 @@ import numpy as np
 import os
 import prrng
 import setuptools_scm
-
-basename = os.path.split(os.path.dirname(os.path.abspath(__file__)))[1]
-genscript = os.path.splitext(os.path.basename(__file__))[0]
-myversion = setuptools_scm.get_version(root=os.path.join(os.path.dirname(__file__), '..'))
 
 # ==================================================================================================
 
@@ -218,9 +215,8 @@ class BottomLayerElastic(MyMesh):
 
 # ==================================================================================================
 
-def generate(myversion, filename, nplates, seed, rid, k_drive, symmetric):
+def generate(myversion, filename, N, nplates, seed, rid, k_drive, symmetric):
 
-    N = 3 ** 6
     M = int(N / 4)
     h = np.pi
     L = h * float(N)
@@ -477,13 +473,42 @@ def generate(myversion, filename, nplates, seed, rid, k_drive, symmetric):
         data[key] = Hlever
         data[key].attrs["desc"] = "Height of the spring driving the lever"
 
-# ----------
+# ==================================================================================================
 
-N = 3 ** 6
-seed = 0
-max_plates = 100
+if __name__ == "__main__":
 
-for rid, symmetric, nplates, k_plate in itertools.product(range(10), [1], [2, 3, 4, 5], [0.001]):
-    generate(myversion, "id={0:03d}_nplates={1:d}_kplate={2:.0e}_symmetric={3:d}.h5".format(rid, nplates, k_plate, symmetric), nplates, seed, rid, k_plate, symmetric)
-    seed += N * (max_plates - 1)
+    basedir = os.path.dirname(__file__)
+    basename = os.path.split(basedir)[1]
+    genscript = os.path.splitext(os.path.basename(__file__))[0]
+    myversion = setuptools_scm.get_version(root=os.path.join(basedir, '..'))
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("outdir", type=str)
+    parser.add_argument("-N", type=int, default=3 ** 6, help="System size")
+    parser.add_argument("-n", type=int, default=10, help="Number of systems to generate")
+    parser.add_argument("-i", type=int, default=0, help="Simulation index at which to start")
+    parser.add_argument("-m", type=int, default=5, help="Maximum number of plastic (minimum == 2)")
+    parser.add_argument("--seed", type=int, default=0, help="Base seed")
+    parser.add_argument("--max-plates", type=int, default=100, help="Maximum number of plates")
+    parser.add_argument("--symmetric", type=int, default=1, help="Drive string symmetric")
+    parser.add_argument("-k", type=float, default=1e-3, help="Drive string stiffness")
+    args = parser.parse_args()
+
+    for sid, nplates in itertools.product(range(args.i, args.i + args.n), range(2, args.m + 1)):
+
+        filename = "id={0:03d}_nplates={1:d}_kplate={2:.0e}_symmetric={3:d}.h5".format(
+            sid,
+            nplates,
+            args.k,
+            args.symmetric)
+
+        generate(
+            myversion,
+            os.path.join(args.outdir, filename),
+            args.N,
+            nplates,
+            args.seed + sid * args.N * (args.max_plates - 1),
+            sid,
+            args.k,
+            args.symmetric,
+        )

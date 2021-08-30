@@ -49,12 +49,13 @@ def initsystem(data):
         [data["/layers/{0:d}/nodemap".format(layer)][...] for layer in layers],
         data["/layers/is_plastic"][...])
 
-    system.setDriveStiffness(data["/drive/k"][...], data["/drive/symmetric"][...])
     system.setMassMatrix(data["/rho"][...])
     system.setDampingMatrix(data["/damping/alpha"][...])
     system.setElastic(data["/elastic/K"][...], data["/elastic/G"][...])
     system.setPlastic(data["/cusp/K"][...], data["/cusp/G"][...], read_epsy(data, system.plastic().size))
     system.setDt(data["/run/dt"][...])
+    system.layerSetTargetActive(data["/drive/drive"][...])
+    system.layerSetDriveStiffness(data["/drive/k"][...], data["/drive/symmetric"][...])
 
     return system
 
@@ -69,6 +70,7 @@ for file in tqdm.tqdm(args.files):
             system = initsystem(data)
             dV = system.quad().AsTensor(2, system.quad().dV())
             sig0 = data["/meta/normalisation/sig"][...]
+            eps0 = data["/meta/normalisation/eps"][...]
 
             output["/coor"] = system.coor()
             output["/conn"] = system.conn()
@@ -77,22 +79,25 @@ for file in tqdm.tqdm(args.files):
 
             for inc in tqdm.tqdm(data["/stored"][...]):
 
-                system.layerSetTargetUbar(
-                    data["/drive/ubar/{0:d}".format(inc)][...],
-                    data["/drive/drive"][...])
+                system.layerSetTargetUbar(data[f"/drive/ubar/{inc:d}"][...])
 
-                u = data["/disp/{0:d}".format(inc)][...]
+                u = data[f"/disp/{inc:d}"][...]
                 system.setU(u)
 
                 Sig = GMat.Sigd(np.average(system.Sig() / sig0, weights=dV, axis=1))
+                Epsp = np.zeros_like(Sig)
+                Epsp[system.plastic()] = np.mean(system.plastic_Epsp() / eps0, axis=1)
 
-                output["/disp/{0:d}".format(inc)] = xh.as3d(u)
-                output["/sigd/{0:d}".format(inc)] = Sig
+                output[f"/disp/{inc:d}"] = xh.as3d(u)
+                output[f"/sigd/{inc:d}"] = Sig
+                output[f"/epsp/{inc:d}"] = Epsp
 
                 series.push_back(
                     xh.Unstructured(output, "/coor", "/conn", "Quadrilateral"),
-                    xh.Attribute(output, "/disp/{0:d}".format(inc), "Node", name="Displacement"),
-                    xh.Attribute(output, "/sigd/{0:d}".format(inc), "Cell", name="Stress"))
+                    xh.Attribute(output, f"/disp/{inc:d}", "Node", name="Displacement"),
+                    xh.Attribute(output, f"/sigd/{inc:d}", "Cell", name="Stress"),
+                    xh.Attribute(output, f"/epsp/{inc:d}", "Cell", name="Plastic strain"),
+                )
 
             xh.write(series, outbasename + ".xdmf")
 
