@@ -346,13 +346,13 @@ def generate(myversion, filename, nplates, seed, rid):
     conn = stitch.conn()
 
     L = np.max(coor[:, 0]) - np.min(coor[:, 0])
-    H = np.max(coor[:, 1]) - np.min(coor[:, 1])
+    # H = np.max(coor[:, 1]) - np.min(coor[:, 1])
 
-    Hi = []
-    for i in range(nlayer):
-        yl = coor[conn[stitch.elemmap(i)[0], 0], 1]
-        yu = coor[conn[stitch.elemmap(i)[-1], 3], 1]
-        Hi += [0.5 * (yu + yl)]
+    # Hi = []
+    # for i in range(nlayer):
+    #     yl = coor[conn[stitch.elemmap(i)[0], 0], 1]
+    #     yu = coor[conn[stitch.elemmap(i)[-1], 3], 1]
+    #     Hi += [0.5 * (yu + yl)]
 
     dofs = stitch.dofs()
     dofs[right, :] = dofs[left, :]
@@ -373,13 +373,13 @@ def generate(myversion, filename, nplates, seed, rid):
 
     initstate = seed + np.arange(N * (nplates - 1)).astype(np.int64)
     initseq = np.zeros_like(initstate)
-    generators = prrng.pcg32_array(initstate, initseq)
 
     k = 2.0
     eps0 = 0.5 * 1e-4
     eps_offset = 1e-2 * (2.0 * eps0)
     nchunk = 6000
 
+    # generators = prrng.pcg32_array(initstate, initseq)
     # epsy = eps_offset + (2.0 * eps0) * generators.weibull([nchunk], k)
     # epsy[0: left, 0] *= init_factor
     # epsy[right: N, 0] *= init_factor
