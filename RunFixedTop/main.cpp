@@ -77,7 +77,7 @@ class Main : public FQF::System {
 
 private:
     H5Easy::File m_file;
-    GooseFEM::Iterate::StopList m_stop = GooseFEM::Iterate::StopList(20);
+    GooseFEM::Iterate::StopList m_residual = GooseFEM::Iterate::StopList(20);
     size_t m_inc = 0;
     size_t m_iiter = 0;
     int m_kick = 1;
@@ -196,7 +196,9 @@ public:
 
                     this->timeStep();
 
-                    if (m_stop.stop(this->residual(), 1e-5)) {
+                    m_residual.roll_insert(this->residual());
+
+                    if (m_residual.descending() && m_residual.all_less(1e-5)) {
                         break;
                     }
 
@@ -229,7 +231,7 @@ public:
             m_iiter = 0;
             m_kick = !m_kick;
             this->quench();
-            m_stop.reset();
+            m_residual.reset();
         }
     }
 };
