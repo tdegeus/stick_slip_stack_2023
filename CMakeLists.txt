@@ -2,8 +2,9 @@ cmake_minimum_required(VERSION 3.16)
 
 project(Layers)
 
-option(Run "Compile Run" ON)
-option(RunFixedBoundary "Compile RunFixedBoundary" ON)
+option(RunFixedLever "Compile RunFixedLever" ON)
+option(RunFixedTop "Compile RunFixedTop" ON)
+option(RunFreeLever "Compile RunFreeLever" ON)
 
 execute_process(
     COMMAND python -c "from setuptools_scm import get_version; print(get_version(root='.'))"
@@ -11,10 +12,14 @@ execute_process(
     OUTPUT_VARIABLE MYVERSION
     OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-if (Run)
-    add_subdirectory(Run)
+if (RunFixedLever)
+    add_subdirectory(RunFixedLever)
 endif()
 
-if (RunFixedBoundary)
-    add_subdirectory(RunFixedBoundary)
+if (RunFixedTop)
+    add_subdirectory(RunFixedTop)
+endif()
+
+if (RunFreeLever)
+    add_subdirectory(RunFreeLever)
 endif()
