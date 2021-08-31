@@ -4,7 +4,7 @@ import tqdm
 import h5py
 import numpy as np
 import prrng
-import GooseFEM as gf
+import GooseFEM  # noqa: F401
 import GMatElastoPlasticQPot.Cartesian2d as GMat
 import FrictionQPotFEM.UniformSingleLayer2d as model
 import XDMFWrite_h5py as xh

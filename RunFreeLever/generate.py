@@ -4,8 +4,9 @@ import h5py
 import itertools
 import numpy as np
 import os
-import prrng
 import setuptools_scm
+
+# import prrng
 
 # ==================================================================================================
 
@@ -114,11 +115,19 @@ class LayerElastic(MyMesh):
         coor = mesh.coor()
         conn = mesh.conn()
         weak = mesh.elementsMiddleLayer()
+
         bot_conn = conn[: weak[0], :]
-        top_conn = conn[int(weak[-1] + 1) :, :] - conn[weak[0], 3]
-        bot_coor = coor[: int(conn[weak[-1], 1] + 1), :]
-        top_coor = coor[conn[weak[0], 3] :, :]
+
+        el = int(weak[-1] + 1)
+        top_conn = conn[el:, :] - conn[weak[0], 3]
+
+        el = int(conn[weak[-1], 1] + 1)
+        bot_coor = coor[:el, :]
+
+        nd = conn[weak[0], 3]
+        top_coor = coor[nd:, :]
         top_coor[:, 1] -= np.min(top_coor[:, 1])
+
         top_ntop = mesh.nodesTopEdge() - conn[weak[0], 3]
         bot_nbot = mesh.nodesBottomEdge()
 
@@ -171,9 +180,13 @@ class TopLayerElastic(MyMesh):
         conn = mesh.conn()
         weak = mesh.elementsMiddleLayer()
 
-        top_conn = conn[int(weak[-1] + 1) :, :] - conn[weak[0], 3]
-        top_coor = coor[conn[weak[0], 3] :, :]
+        el = int(weak[-1] + 1)
+        top_conn = conn[el:, :] - conn[weak[0], 3]
+
+        el = conn[weak[0], 3]
+        top_coor = coor[el:, :]
         top_coor[:, 1] -= np.min(top_coor[:, 1])
+
         top_ntop = mesh.nodesTopEdge() - conn[weak[0], 3]
 
         n = mesh.nodesLeftEdge()

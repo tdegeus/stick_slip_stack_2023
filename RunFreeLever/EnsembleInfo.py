@@ -1,7 +1,7 @@
 import argparse
 import FrictionQPotFEM.UniformMultiLayerLeverDrive2d as model
 import GMatElastoPlasticQPot.Cartesian2d as GMat
-import GooseFEM
+import GooseFEM  # noqa: F401
 import h5py
 import numpy as np
 import os

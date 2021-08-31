@@ -1,17 +1,12 @@
+import argparse
 import GooseFEM
 import h5py
 import itertools
 import numpy as np
 import os
-import prrng
 import setuptools_scm
 
-basename = os.path.split(os.path.dirname(os.path.abspath(__file__)))[1]
-genscript = os.path.splitext(os.path.basename(__file__))[0]
-
-myversion = setuptools_scm.get_version(
-    root=os.path.join(os.path.dirname(__file__), "..")
-)
+# import prrng
 
 # ==================================================================================================
 
@@ -76,31 +71,37 @@ class MyMesh:
         gplt.patch(
             coor=self.coor(), conn=self.conn(), cindex=np.arange(self.conn().shape[0])
         )
-        ax.plot(self.coor()[:, 0], self.coor()[:, 1], marker=".", linestyle="none")
+
+        ax.plot(self.coor()[:, 0], self.coor()[:, 1], marker=".", ls="none")
+
         ax.plot(
             self.coor()[self.nodesLeftEdge(), 0],
             self.coor()[self.nodesLeftEdge(), 1],
             marker="o",
-            linestyle="none",
+            ls="none",
         )
+
         ax.plot(
             self.coor()[self.nodesRightEdge(), 0],
             self.coor()[self.nodesRightEdge(), 1],
             marker="o",
-            linestyle="none",
+            ls="none",
         )
+
         ax.plot(
             self.coor()[self.nodesBottomEdge(), 0],
             self.coor()[self.nodesBottomEdge(), 1],
             marker="o",
-            linestyle="none",
+            ls="none",
         )
+
         ax.plot(
             self.coor()[self.nodesTopEdge(), 0],
             self.coor()[self.nodesTopEdge(), 1],
             marker="o",
-            linestyle="none",
+            ls="none",
         )
+
         plt.show()
 
 
@@ -114,11 +115,19 @@ class LayerElastic(MyMesh):
         coor = mesh.coor()
         conn = mesh.conn()
         weak = mesh.elementsMiddleLayer()
+
         bot_conn = conn[: weak[0], :]
-        top_conn = conn[int(weak[-1] + 1) :, :] - conn[weak[0], 3]
-        bot_coor = coor[: int(conn[weak[-1], 1] + 1), :]
-        top_coor = coor[conn[weak[0], 3] :, :]
+
+        el = int(weak[-1] + 1)
+        top_conn = conn[el:, :] - conn[weak[0], 3]
+
+        el = int(conn[weak[-1], 1] + 1)
+        bot_coor = coor[:el, :]
+
+        nd = conn[weak[0], 3]
+        top_coor = coor[nd:, :]
         top_coor[:, 1] -= np.min(top_coor[:, 1])
+
         top_ntop = mesh.nodesTopEdge() - conn[weak[0], 3]
         bot_nbot = mesh.nodesBottomEdge()
 
@@ -171,9 +180,13 @@ class TopLayerElastic(MyMesh):
         conn = mesh.conn()
         weak = mesh.elementsMiddleLayer()
 
-        top_conn = conn[int(weak[-1] + 1) :, :] - conn[weak[0], 3]
-        top_coor = coor[conn[weak[0], 3] :, :]
+        el = int(weak[-1] + 1)
+        top_conn = conn[el:, :] - conn[weak[0], 3]
+
+        el = conn[weak[0], 3]
+        top_coor = coor[el:, :]
         top_coor[:, 1] -= np.min(top_coor[:, 1])
+
         top_ntop = mesh.nodesTopEdge() - conn[weak[0], 3]
 
         n = mesh.nodesLeftEdge()
@@ -270,9 +283,8 @@ def mysave(myfile, key, data, **kwargs):
         myfile[key].attrs[attr] = kwargs[attr]
 
 
-def generate(myversion, filename, nplates, seed, rid):
+def generate(myversion, filename, N, nplates, seed, rid):
 
-    N = 3 ** 6
     M = int(N / 4)
     h = np.pi
     L = h * float(N)
@@ -542,12 +554,44 @@ def generate(myversion, filename, nplates, seed, rid):
         )
 
 
-# ----------
+# ==================================================================================================
 
-N = 3 ** 6
-seed = 0
-max_plates = 100
+if __name__ == "__main__":
 
-for rid, nplates in itertools.product(range(3), [2, 3, 4, 5]):
-    generate(myversion, f"id={rid:d}_nplates={nplates:d}.h5", nplates, seed, rid)
-    seed += N * (max_plates - 1)
+    basedir = os.path.dirname(__file__)
+    basename = os.path.split(basedir)[1]
+    genscript = os.path.splitext(os.path.basename(__file__))[0]
+    myversion = setuptools_scm.get_version(root=os.path.join(basedir, ".."))
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("outdir", type=str)
+    parser.add_argument("-N", type=int, default=3 ** 6, help="System size")
+    parser.add_argument(
+        "-n", type=int, default=10, help="Number of systems to generate"
+    )
+    parser.add_argument(
+        "-i", type=int, default=0, help="Simulation index at which to start"
+    )
+    parser.add_argument(
+        "-m", type=int, default=5, help="Maximum number of plastic (minimum == 2)"
+    )
+    parser.add_argument("--seed", type=int, default=0, help="Base seed")
+    parser.add_argument(
+        "--max-plates", type=int, default=100, help="Maximum number of plates"
+    )
+    args = parser.parse_args()
+
+    for sid, nplates in itertools.product(
+        range(args.i, args.i + args.n), range(2, args.m + 1)
+    ):
+
+        filename = f"id={sid:03d}_nplates={nplates:d}.h5"
+
+        generate(
+            myversion,
+            os.path.join(args.outdir, filename),
+            args.N,
+            nplates,
+            args.seed + sid * args.N * (args.max_plates - 1),
+            sid,
+        )

@@ -1,17 +1,12 @@
+import argparse
 import GooseFEM
 import h5py
 import itertools
 import numpy as np
 import os
-import prrng
 import setuptools_scm
 
-basename = os.path.split(os.path.dirname(os.path.realpath(__file__)))[1]
-genscript = os.path.splitext(os.path.basename(__file__))[0]
-
-myversion = setuptools_scm.get_version(
-    root=os.path.join(os.path.dirname(os.path.realpath(__file__)), "..")
-)
+# import prrng
 
 # ==================================================================================================
 
@@ -120,11 +115,19 @@ class LayerElastic(MyMesh):
         coor = mesh.coor()
         conn = mesh.conn()
         weak = mesh.elementsMiddleLayer()
+
         bot_conn = conn[: weak[0], :]
-        top_conn = conn[int(weak[-1] + 1) :, :] - conn[weak[0], 3]
-        bot_coor = coor[: int(conn[weak[-1], 1] + 1), :]
-        top_coor = coor[conn[weak[0], 3] :, :]
+
+        el = int(weak[-1] + 1)
+        top_conn = conn[el:, :] - conn[weak[0], 3]
+
+        el = int(conn[weak[-1], 1] + 1)
+        bot_coor = coor[:el, :]
+
+        nd = conn[weak[0], 3]
+        top_coor = coor[nd:, :]
         top_coor[:, 1] -= np.min(top_coor[:, 1])
+
         top_ntop = mesh.nodesTopEdge() - conn[weak[0], 3]
         bot_nbot = mesh.nodesBottomEdge()
 
@@ -177,9 +180,13 @@ class TopLayerElastic(MyMesh):
         conn = mesh.conn()
         weak = mesh.elementsMiddleLayer()
 
-        top_conn = conn[int(weak[-1] + 1) :, :] - conn[weak[0], 3]
-        top_coor = coor[conn[weak[0], 3] :, :]
+        el = int(weak[-1] + 1)
+        top_conn = conn[el:, :] - conn[weak[0], 3]
+
+        el = conn[weak[0], 3]
+        top_coor = coor[el:, :]
         top_coor[:, 1] -= np.min(top_coor[:, 1])
+
         top_ntop = mesh.nodesTopEdge() - conn[weak[0], 3]
 
         n = mesh.nodesLeftEdge()
@@ -276,9 +283,8 @@ def mysave(myfile, key, data, **kwargs):
         myfile[key].attrs[attr] = kwargs[attr]
 
 
-def generate(myversion, filename, nplates, seed, rid, k_drive, symmetric):
+def generate(myversion, filename, N, nplates, seed, rid, k_drive, symmetric):
 
-    N = 3 ** 6
     M = int(N / 4)
     h = np.pi
     L = h * float(N)
@@ -352,7 +358,7 @@ def generate(myversion, filename, nplates, seed, rid, k_drive, symmetric):
     conn = stitch.conn()
 
     L = np.max(coor[:, 0]) - np.min(coor[:, 0])
-    H = np.max(coor[:, 1]) - np.min(coor[:, 1])
+    # H = np.max(coor[:, 1]) - np.min(coor[:, 1])
 
     Hi = []
     for i in range(nlayer):
@@ -379,13 +385,13 @@ def generate(myversion, filename, nplates, seed, rid, k_drive, symmetric):
 
     initstate = seed + np.arange(N * (nplates - 1)).astype(np.int64)
     initseq = np.zeros_like(initstate)
-    generators = prrng.pcg32_array(initstate, initseq)
 
     k = 2.0
     eps0 = 0.5 * 1e-4
     eps_offset = 1e-2 * (2.0 * eps0)
     nchunk = 6000
 
+    # generators = prrng.pcg32_array(initstate, initseq)
     # epsy = eps_offset + (2.0 * eps0) * generators.weibull([nchunk], k)
     # epsy[0: left, 0] *= init_factor
     # epsy[right: N, 0] *= init_factor
@@ -630,9 +636,6 @@ def generate(myversion, filename, nplates, seed, rid, k_drive, symmetric):
             desc="Per layer: true is the layer is plastic",
         )
 
-        ubar = np.zeros((nlayer, 2))
-        ninc = 1000
-
         mysave(
             data,
             "/drive/k",
@@ -669,24 +672,52 @@ def generate(myversion, filename, nplates, seed, rid, k_drive, symmetric):
         )
 
 
-# ----------
+# ==================================================================================================
 
-N = 3 ** 6
-seed = 0
-max_plates = 100
+if __name__ == "__main__":
 
-for rid, symmetric, nplates, k_plate in itertools.product(
-    range(10), [1], [2, 3, 4, 5], [0.001]
-):
-    generate(
-        myversion,
-        "id={:03d}_nplates={:d}_kplate={:.0e}_symmetric={:d}.h5".format(
-            rid, nplates, k_plate, symmetric
-        ),
-        nplates,
-        seed,
-        rid,
-        k_plate,
-        symmetric,
+    basedir = os.path.dirname(__file__)
+    basename = os.path.split(basedir)[1]
+    genscript = os.path.splitext(os.path.basename(__file__))[0]
+    myversion = setuptools_scm.get_version(root=os.path.join(basedir, ".."))
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("outdir", type=str)
+    parser.add_argument("-N", type=int, default=3 ** 6, help="System size")
+    parser.add_argument(
+        "-n", type=int, default=10, help="Number of systems to generate"
     )
-    seed += N * (max_plates - 1)
+    parser.add_argument(
+        "-i", type=int, default=0, help="Simulation index at which to start"
+    )
+    parser.add_argument(
+        "-m", type=int, default=5, help="Maximum number of plastic (minimum == 2)"
+    )
+    parser.add_argument("--seed", type=int, default=0, help="Base seed")
+    parser.add_argument(
+        "--max-plates", type=int, default=100, help="Maximum number of plates"
+    )
+    parser.add_argument(
+        "--symmetric", type=int, default=1, help="Drive string symmetric"
+    )
+    parser.add_argument("-k", type=float, default=1e-3, help="Drive string stiffness")
+    args = parser.parse_args()
+
+    for sid, nplates in itertools.product(
+        range(args.i, args.i + args.n), range(2, args.m + 1)
+    ):
+
+        filename = "id={:03d}_nplates={:d}_kplate={:.0e}_symmetric={:d}.h5".format(
+            sid, nplates, args.k, args.symmetric
+        )
+
+        generate(
+            myversion,
+            os.path.join(args.outdir, filename),
+            args.N,
+            nplates,
+            args.seed + sid * args.N * (args.max_plates - 1),
+            sid,
+            args.k,
+            args.symmetric,
+        )
