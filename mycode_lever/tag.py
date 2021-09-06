@@ -1,5 +1,4 @@
 import packaging.version
-import unittest
 
 def has_uncommited(ver: str):
     """
@@ -68,49 +67,3 @@ def greater_equal(a: str, b: str) -> bool:
 
     return packaging.version.parse(a) >= packaging.version.parse(b)
 
-
-class MyTests(unittest.TestCase):
-
-    def test_has_uncomitted(self):
-
-        self.assertTrue(has_uncommited("4.4.dev1+g423e6a8.d20210902"))
-        self.assertFalse(has_uncommited("4.4.dev1+g423e6a8"))
-        self.assertFalse(has_uncommited("4.4.dev1"))
-        self.assertFalse(has_uncommited("4.4"))
-
-    def test_any_has_uncommitted(self):
-
-        self.assertTrue(any_has_uncommitted(["main=3.2.1", "other=4.4.dev1+g423e6a8.d20210902"]))
-        self.assertFalse(any_has_uncommitted(["main=3.2.1", "other=4.4.dev1+g423e6a8"]))
-        self.assertFalse(any_has_uncommitted(["main=3.2.1", "other=4.4.dev1"]))
-        self.assertFalse(any_has_uncommitted(["main=3.2.1", "other=4.4"]))
-
-    def test_greater_equal(self):
-
-        self.assertFalse(greater_equal("4.4.dev1+g423e6a8.d20210902", "4.4"))
-        self.assertFalse(greater_equal("4.4.dev1+g423e6a8", "4.4"))
-        self.assertFalse(greater_equal("4.4.dev1", "4.4"))
-        self.assertTrue(greater_equal("4.4", "4.4"))
-
-
-    def test_all_greater_equal(self):
-
-        a = ["main=3.2.1", "other=4.4"]
-        b = ["main=3.2.0", "other=4.4", "more=3.0.0"]
-        self.assertTrue(all_greater_equal(a, b))
-
-        a = ["main=3.2.1", "other=4.4"]
-        b = ["main=3.2.1.dev1", "other=4.4", "more=3.0.0"]
-        self.assertTrue(all_greater_equal(a, b))
-
-        a = ["main=3.2.1", "other=4.4"]
-        b = ["main=3.2.1.dev1+g423e6a8", "other=4.4", "more=3.0.0"]
-        self.assertTrue(all_greater_equal(a, b))
-
-        a = ["main=3.2.1", "other=4.4"]
-        b = ["main=3.2.1.dev1+g423e6a8.d20210902", "other=4.4", "more=3.0.0"]
-        self.assertTrue(all_greater_equal(a, b))
-
-if __name__ == "__main__":
-
-    unittest.main()

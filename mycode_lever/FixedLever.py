@@ -25,7 +25,7 @@ def mysave(myfile, key, data, **kwargs):
         myfile[key].attrs[attr] = kwargs[attr]
 
 
-def generate(filename: str, N: int, nplates: int, seed: int, k_drive: float, symmetric = True: bool, delta_gamma: float=None):
+def generate(filename: str, N: int, nplates: int, seed: int, k_drive: float, symmetric: bool = True, delta_gamma: float=None):
     """
     Generate an input file.
 
