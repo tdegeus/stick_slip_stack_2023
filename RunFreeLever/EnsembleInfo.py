@@ -8,6 +8,7 @@ import os
 import prrng
 import setuptools_scm
 import tqdm
+from numpy.typing import ArrayLike
 
 basename = os.path.split(os.path.dirname(os.path.realpath(__file__)))[1]
 genscript = os.path.splitext(os.path.basename(__file__))[0]
@@ -23,6 +24,20 @@ args = parser.parse_args()
 assert np.all([os.path.isfile(os.path.realpath(file)) for file in args.files])
 assert len(args.files) > 0
 filenames = [os.path.basename(file) for file in args.files]
+
+
+def mysave(myfile: h5py.File, dataset: str, data: ArrayLike, **kwargs):
+    """
+    Alias to save dataset and possible attributes provided as key-word arguments.
+
+    :param myfile: Opened HDF5 file.
+    :param dataset: The name of the dataset.
+    :param data: The data to write.
+    """
+
+    myfile[dataset] = data
+    for attr in kwargs:
+        myfile[dataset].attrs[attr] = kwargs[attr]
 
 
 def read_epsy(data, N):
@@ -104,6 +119,7 @@ for ifile, file in enumerate(tqdm.tqdm(args.files)):
         Drive_x = np.argwhere(Drive[:, 0]).ravel()
         Height = data["/drive/height"][...]
         Dgamma = data["/drive/delta_gamma"][...][incs]
+        Target = data["/drive/lever/target"][...]
 
         Strain = np.empty((ninc), dtype=float)
         Stress = np.empty((ninc), dtype=float)
@@ -115,10 +131,7 @@ for ifile, file in enumerate(tqdm.tqdm(args.files)):
         Drive_Fx = np.zeros((ninc, Drive_x.size), dtype=float)
         Layers_Ux = np.zeros((ninc, nlayer), dtype=float)
         Layers_Tx = np.zeros((ninc, nlayer), dtype=float)
-
-        # todo: remove or replace
-        gamma = np.cumsum(data["/drive/delta_gamma"][...])
-        H = data["/drive/H"][...]
+        Lever_Fx = data["/drive/lever/position"][...] - Target
 
         for inc in tqdm.tqdm(incs):
 
@@ -128,8 +141,7 @@ for ifile, file in enumerate(tqdm.tqdm(args.files)):
             u = data[f"/disp/{inc:d}"][...]
             system.setU(u)
 
-            # todo: remove or replace
-            system.setLeverTarget(H * gamma[inc])
+            system.setLeverTarget(Target[inc])
             assert np.allclose(system.layerTargetUbar(), ubar)
 
             Drive_Ux[inc, :] = ubar[Drive_x, 0] / Height[Drive_x]
@@ -156,106 +168,153 @@ for ifile, file in enumerate(tqdm.tqdm(args.files)):
 
     with h5py.File(args.output, "a" if ifile > 0 else "w") as output:
 
-        fname = os.path.normpath(file)
+        fname = str(os.path.normpath(file))
 
-        key = f"/file/{fname}/drive/drive"
-        output[key] = Drive
-        output[key].attrs["desc"] = "Drive per layer and direction"
+        mysave(
+            output,
+            f"/file/{fname}/drive/drive",
+            Drive,
+            desc="Drive per layer and direction",
+        )
 
-        key = f"/file/{fname}/drive/height"
-        output[key] = Height
-        output[key].attrs["desc"] = "Height of the loading frame of each layer"
+        mysave(
+            output,
+            f"/file/{fname}/drive/height",
+            Height,
+            desc="Height of the loading frame of each layer",
+        )
 
-        key = f"/file/{fname}/drive/delta_gamma"
-        output[key] = Dgamma / eps0
-        output[key].attrs["desc"] = "Applied shear [ninc], in units of eps0"
+        mysave(
+            output,
+            f"/file/{fname}/drive/delta_gamma",
+            Dgamma / eps0,
+            desc="Applied shear [ninc], in units of eps0",
+        )
 
-        key = f"/file/{fname}/drive/u_x"
-        output[key] = Drive_Ux
-        output[key].attrs[
-            "desc"
-        ] = "Drive position in x-direction on driven layers divided by layer height [ninc, ndrive]"
+        mysave(
+            output,
+            f"/file/{fname}/drive/u_x",
+            Drive_Ux,
+            desc="Drive position in x-direction on driven layers divided by layer height [ninc, ndrive]",
+        )
 
-        key = f"/file/{fname}/drive/f_x"
-        output[key] = Drive_Fx
-        output[key].attrs[
-            "desc"
-        ] = "Drive force in x-direction on driven layers [ninc, nlayer]"
+        mysave(
+            output,
+            f"/file/{fname}/drive/f_x",
+            Drive_Fx,
+            desc="Drive force in x-direction on driven layers [ninc, nlayer]",
+        )
 
-        key = f"/file/{fname}/macroscopic/eps"
-        output[key] = Strain
-        output[key].attrs[
-            "desc"
-        ] = "Macroscopic strain per increment [ninc], in units of eps0"
+        mysave(
+            output,
+            f"/file/{fname}/drive/lever",
+            Lever_Fx,
+            desc="Drive 'force' in x-direction on the lever [ninc]",
+        )
 
-        key = f"/file/{fname}/macroscopic/sig"
-        output[key] = Stress
-        output[key].attrs[
-            "desc"
-        ] = "Macroscopic stress per increment [ninc], in units of sig0"
+        mysave(
+            output,
+            f"/file/{fname}/macroscopic/eps",
+            Strain,
+            desc="Macroscopic strain per increment [ninc], in units of eps0",
+        )
 
-        key = f"/file/{fname}/layers/eps"
-        output[key] = Strain_layers
-        output[key].attrs[
-            "desc"
-        ] = "Average strain per layer [ninc, nlayer], in units of eps0"
+        mysave(
+            output,
+            f"/file/{fname}/macroscopic/sig",
+            Stress,
+            desc="Macroscopic stress per increment [ninc], in units of sig0",
+        )
 
-        key = f"/file/{fname}/layers/sig"
-        output[key] = Stress_layers
-        output[key].attrs[
-            "desc"
-        ] = "Average stress per layer [ninc, nlayer], in units of sig0"
+        mysave(
+            output,
+            f"/file/{fname}/layers/eps",
+            Strain_layers,
+            desc="Average strain per layer [ninc, nlayer], in units of eps0",
+        )
 
-        key = f"/file/{fname}/layers/S"
-        output[key] = S_layers
-        output[key].attrs[
-            "desc"
-        ] = "Total number of yield events per layer [ninc, nlayer]"
+        mysave(
+            output,
+            f"/file/{fname}/layers/sig",
+            Stress_layers,
+            desc="Average stress per layer [ninc, nlayer], in units of sig0",
+        )
 
-        key = f"/file/{fname}/layers/A"
-        output[key] = A_layers
-        output[key].attrs[
-            "desc"
-        ] = "Total number of blocks that yields per layer [ninc, nlayer]"
+        mysave(
+            output,
+            f"/file/{fname}/layers/S",
+            S_layers,
+            desc="Total number of yield events per layer [ninc, nlayer]",
+        )
 
-        key = f"/file/{fname}/layers/is_plastic"
-        output[key] = is_plastic
-        output[key].attrs["desc"] = "Per layer: plastic (True) or elastic (False)"
+        mysave(
+            output,
+            f"/file/{fname}/layers/A",
+            A_layers,
+            desc="Total number of blocks that yields per layer [ninc, nlayer]",
+        )
 
-        key = f"/file/{fname}/layers/ubar_x"
-        output[key] = Layers_Ux
-        output[key].attrs[
-            "desc"
-        ] = "x-component of the average displacement of each layer [ninc, ndrive]"
+        mysave(
+            output,
+            f"/file/{fname}/layers/is_plastic",
+            is_plastic,
+            desc="Per layer: plastic (True) or elastic (False)",
+        )
 
-        key = f"/file/{fname}/layers/target_ubar_x"
-        output[key] = Layers_Tx
-        output[key].attrs[
-            "desc"
-        ] = "x-component of the target average displacement of each layer [ninc, ndrive]"
+        mysave(
+            output,
+            f"/file/{fname}/layers/ubar_x",
+            Layers_Ux,
+            desc="x-component of the average displacement of each layer [ninc, ndrive]",
+        )
+
+        mysave(
+            output,
+            f"/file/{fname}/layers/target_ubar_x",
+            Layers_Tx,
+            desc="x-component of the target average displacement of each layer [ninc, ndrive]",
+        )
 
 with h5py.File(args.output, "a") as output:
 
-    key = "/normalisation/N"
-    output[key] = N
-    output[key].attrs["desc"] = "Number of blocks along each plastic layer"
+    mysave(
+        output,
+        "/normalisation/N",
+        N,
+        desc="Number of blocks along each plastic layer",
+    )
 
-    key = "/normalisation/kdrive"
-    output[key] = kdrive
-    output[key].attrs["desc"] = "Driving spring stiffness"
+    mysave(
+        output,
+        "/normalisation/kdrive",
+        kdrive,
+        desc="Driving spring stiffness",
+    )
 
-    key = "/normalisation/sig0"
-    output[key] = sig0
-    output[key].attrs["desc"] = "Unit of stress"
+    mysave(
+        output,
+        "/normalisation/sig0",
+        sig0,
+        desc="Unit of stress",
+    )
 
-    key = "/normalisation/eps0"
-    output[key] = eps0
-    output[key].attrs["desc"] = "Unit of strain"
+    mysave(
+        output,
+        "/normalisation/eps0",
+        eps0,
+        desc="Unit of strain",
+    )
 
-    key = "/normalisation/dt"
-    output[key] = dt
-    output[key].attrs["desc"] = "Time step"
+    mysave(
+        output,
+        "/normalisation/dt",
+        dt,
+        desc="Time step",
+    )
 
-    key = f"/meta/{basename}/{genscript}.py"
-    output[key] = myversion
-    output[key].attrs["desc"] = "Version at which this file was created"
+    mysave(
+        output,
+        f"/meta/{basename}/{genscript}.py",
+        myversion,
+        desc="Version at which this file was created",
+    )

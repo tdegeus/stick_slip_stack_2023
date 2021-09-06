@@ -19,7 +19,7 @@ namespace FQF = FrictionQPotFEM::UniformMultiLayerLeverDrive2d;
 namespace GM = GMatElastoPlasticQPot::Cartesian2d;
 
 template <class T>
-void CheckOrDumpWithDescription(
+void AppendOrDumpWithDescription(
     H5Easy::File& file, const std::string& path, const T& data, const std::string& description)
 {
     if (file.exist(path)) {
@@ -133,13 +133,13 @@ public:
         auto deps = FQF::version_dependencies();
         deps.push_back(prrng::version());
 
-        CheckOrDumpWithDescription(
+        AppendOrDumpWithDescription(
             m_file,
             "/meta/RunFreeLever/version",
             std::string(MYVERSION),
             "Code version at compile-time.");
 
-        CheckOrDumpWithDescription(
+        AppendOrDumpWithDescription(
             m_file,
             "/meta/RunFreeLever/version_dependencies",
             deps,
