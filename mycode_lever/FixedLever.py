@@ -753,7 +753,7 @@ def cli_job_rerun_multislip(cli_args=None):
         "-n",
         "--group",
         type=int,
-        default=10,
+        default=50,
         help="Number of pushes to group in a single job",
     )
 
