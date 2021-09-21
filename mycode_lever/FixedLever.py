@@ -8,7 +8,7 @@ import numpy as np
 
 from . import mesh
 from . import storage
-from . import system
+from . import System
 from . import tag
 from ._version import version
 
@@ -435,7 +435,7 @@ def run(filename: str, dev: bool):
 
     with h5py.File(filename, "a") as data:
 
-        this = system.initsystem(data)
+        this = System.init(data)
 
         # check version compatibility
 
