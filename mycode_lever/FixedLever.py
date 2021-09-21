@@ -8,24 +8,11 @@ import unittest
 
 from . import system
 from . import tag
+from . import storage
 from . import mesh
 from ._version import version
 
 system = "FixedLever"
-
-def dset_extend1d(data: h5py.File, key: str, i: int, value):
-
-    dset = data[key]
-    if dset.size <= i:
-        dset.resize((i + 1, ))
-    dset[i] = value
-
-
-def mysave(myfile, key, data, **kwargs):
-    myfile[key] = data
-    for attr in kwargs:
-        myfile[key].attrs[attr] = kwargs[attr]
-
 
 def generate(filename: str, N: int, nplates: int, seed: int, k_drive: float, symmetric: bool = True, delta_gamma: float=None):
     """
@@ -39,7 +26,7 @@ def generate(filename: str, N: int, nplates: int, seed: int, k_drive: float, sym
     :param delta_gamma: Loading history (for testing only).
     """
 
-    M = int(N / 4)
+    M = max(3, int(N / 4))
     h = np.pi
     L = h * float(N)
     nlayer = 2 * nplates - 1
@@ -167,213 +154,213 @@ def generate(filename: str, N: int, nplates: int, seed: int, k_drive: float, sym
 
     with h5py.File(filename, "w") as data:
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/coor",
             coor,
             desc="Nodal coordinates [nnode, ndim]",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/conn",
             conn,
             desc="Connectivity (Quad4: nne = 4) [nelem, nne]",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/dofs",
             dofs,
             desc="DOFs per node, accounting for semi-periodicity [nnode, ndim]",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/iip",
             iip,
             desc="Prescribed DOFs [nnp]",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/run/epsd/kick",
             eps0 * 1e-4,
             desc="Strain kick to apply",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/run/dt",
             dt,
             desc="Time step",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/rho",
             rho * np.ones(nelem),
             desc="Mass density [nelem]",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/damping/alpha",
             alpha * np.ones(nelem),
             desc="Damping coefficient (density) [nelem]",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/elastic/elem",
             elastic,
             desc="Elastic elements [nelem - N]",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/elastic/K",
             K * np.ones(len(elastic)),
             desc="Bulk modulus for elements in '/elastic/elem' [nelem - N]",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/elastic/G",
             G * np.ones(len(elastic)),
             desc="Shear modulus for elements in '/elastic/elem' [nelem - N]",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/cusp/elem",
             plastic,
             desc="Plastic elements with cusp potential [nplastic]",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/cusp/K",
             K * np.ones(len(plastic)),
             desc="Bulk modulus for elements in '/cusp/elem' [nplastic]",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/cusp/G",
             G * np.ones(len(plastic)),
             desc="Shear modulus for elements in '/cusp/elem' [nplastic]",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/cusp/epsy/initstate",
             initstate,
             desc="State to use to initialise prrng::pcg32",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/cusp/epsy/initseq",
             initseq,
             desc="Sequence to use to initialise prrng::pcg32",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/cusp/epsy/k",
             k,
             desc="Shape factor of Weibull distribution",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/cusp/epsy/eps0",
             eps0,
             desc="Yield strain normalisation: multiply all yield strains with twice this factor",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/cusp/epsy/eps_offset",
             eps_offset,
             desc="Yield strain offset: add this (small) offset to each yield strain, after normalisation!",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/cusp/epsy/nchunk",
             nchunk,
             desc="Chunk size",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/meta/normalisation/N",
             N,
             desc="Number of blocks along each plastic layer",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/meta/normalisation/l",
             h,
             desc="Elementary block size",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/meta/normalisation/rho",
             rho,
             desc="Elementary density",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/meta/normalisation/G",
             G,
             desc="Uniform shear modulus == 2 mu",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/meta/normalisation/K",
             K,
             desc="Uniform bulk modulus == kappa",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/meta/normalisation/eps",
             eps0,
             desc="Typical yield strain",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/meta/normalisation/sig",
             2.0 * G * eps0,
             desc="== 2 G eps0",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/meta/seed_base",
             seed,
             desc="Basic seed == 'unique' identifier",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
-            f"/meta/{basename}/{genscript}",
-            myversion,
+            f"/meta/Run{system}/version",
+            version,
             desc="Version when generating",
         )
 
         elemmap = stitch.elemmap()
         nodemap = stitch.nodemap()
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/layers/stored",
             np.arange(len(elemmap)).astype(np.int64),
@@ -384,42 +371,42 @@ def generate(filename: str, N: int, nplates: int, seed: int, k_drive: float, sym
             data[f"/layers/{i:d}/elemmap"] = elemmap[i]
             data[f"/layers/{i:d}/nodemap"] = nodemap[i]
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/layers/is_plastic",
             is_plastic,
             desc="Per layer: true is the layer is plastic",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/drive/k",
             k_drive,
             desc="Stiffness of the spring providing the drive",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/drive/symmetric",
             symmetric,
             desc="If false, the driving spring buckles under tension.",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/drive/drive",
             drive,
             desc="Per layer: true when the layer's mean position is actuated",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/drive/delta_gamma",
             delta_gamma,
             desc="Affine simple shear increment",
         )
 
-        mysave(
+        storage.dump_with_atttrs(
             data,
             "/drive/height",
             Hi,
@@ -507,8 +494,8 @@ def run(filename: str, dev: bool):
             niter = this.minimise()
             print(f"\"{basename}\": inc = {inc:8d}, niter = {niter:8d}")
 
-            dset_extend1d(data, "/stored", inc, inc)
-            dset_extend1d(data, "/t", inc, this.t())
+            storage.dset_extend1d(data, "/stored", inc, inc)
+            storage.dset_extend1d(data, "/t", inc, this.t())
             data[f"/disp/{inc:d}"] = this.u()
             data[f"/drive/ubar/{inc:d}"] = this.layerTargetUbar()
 
@@ -517,7 +504,7 @@ def run(filename: str, dev: bool):
         data["/meta/RunFixedLever/completed"] = 1
 
 
-def main():
+def cli_run():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("file", type=str, help="Input file (read/write)")
@@ -528,27 +515,5 @@ def main():
     assert os.path.isfile(os.path.realpath(args.file))
 
     run(args.file, args.dev)
-
-
-class MyTests(unittest.TestCase):
-
-    def test_run(self):
-
-        generate("mytest.h5", 9, 2, 0, 1e-3, 1, delta_gamma=[0, 0.005, 0.01])
-
-        # self.assertTrue(True)
-
-    # def test_all_greater_equal(self):
-
-    #     a = ["xtensor=3.2.1", "frictionqpotfem=4.4"]
-    #     b = ["xtensor=3.2.0", "frictionqpotfem=4.4", "eigen=3.0.0"]
-    #     self.assertTrue(all_greater_equal(a, b))
-
-if __name__ == "__main__":
-
-    unittest.main()
-
-
-
 
 

@@ -1,5 +1,5 @@
 import GooseFEM
-
+import numpy as np
 
 class MyMesh:
     def coor(self):
