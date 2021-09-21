@@ -2,7 +2,6 @@ import os
 import shutil
 import sys
 import unittest
-import h5py
 
 root = os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, os.path.abspath(root))

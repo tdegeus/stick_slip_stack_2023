@@ -13,10 +13,10 @@ import tqdm
 import XDMFWrite_h5py as xh
 
 from . import mesh
+from . import slurm
 from . import storage
 from . import System
 from . import tag
-from . import slurm
 from ._version import version
 
 config = "FixedLever"
@@ -634,10 +634,7 @@ def runinc_event_basic(system: model.System, file: h5py.File, inc: int) -> dict:
         if niter == 0:
             break
 
-    return dict(
-        r = np.array(R),
-        t = np.array(T)
-    )
+    return dict(r=np.array(R), t=np.array(T))
 
 
 def cli_rerun_event(cli_args=None):
@@ -738,10 +735,10 @@ def cli_job_rerun_multislip(cli_args=None):
 
     parser.add_argument(
         "-o",
-        "--output",
+        "--outdir",
         type=str,
         default=os.getcwd(),
-        help="Output directory"
+        help="Output directory of all simulation and output variables",
     )
 
     parser.add_argument(
@@ -786,21 +783,17 @@ def cli_job_rerun_multislip(cli_args=None):
     args = parser.parse_args(cli_args)
 
     assert os.path.isfile(os.path.realpath(args.info))
-    assert os.path.isdir(os.path.realpath(args.output))
+    assert os.path.isdir(os.path.realpath(args.outdir))
 
     basedir = os.path.dirname(args.info)
     executable = args.executable
 
     commands = []
 
+    with h5py.File(args.info, "r") as file:
 
-    with h5py.File(args.info, "r") as data:
-
-        files = [os.path.join(basedir, f) for f in data["/files"].asstr()[...]]
-        N = data["/normalisation/N"][...]
-
-        for full in data["/files"].asstr()[...]:
-            S = data[f"/full/{full}/S_layers"][...]
+        for full in file["/files"].asstr()[...]:
+            S = file[f"/full/{full}/S_layers"][...]
             incs = np.argwhere(np.sum(S > 0, axis=1) > 1).ravel()
 
             if len(incs) == 0:
@@ -808,7 +801,7 @@ def cli_job_rerun_multislip(cli_args=None):
 
             simid = os.path.splitext(os.path.basename(full))[0]
             filepath = os.path.join(basedir, full)
-            relfile = os.path.relpath(filepath, args.output)
+            relfile = os.path.relpath(filepath, args.outdir)
 
             for i in incs:
                 commands += [f"{executable} -i {i:d} -o {simid}_inc={i:d}.h5 {relfile}"]
@@ -817,7 +810,7 @@ def cli_job_rerun_multislip(cli_args=None):
         commands,
         basename=args.executable.replace(" ", "_"),
         group=args.group,
-        outdir=args.output,
+        outdir=args.outdir,
         sbatch={"time": args.time},
     )
 
