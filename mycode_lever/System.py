@@ -2,6 +2,7 @@ import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
 import h5py
 import numpy as np
 import prrng
+from numpy.typing import ArrayLike
 
 
 def read_epsy(file: h5py.File) -> np.ndarray:
@@ -61,3 +62,22 @@ def init(file: h5py.File) -> model.System:
     system.layerSetDriveStiffness(file["/drive/k"][...], file["/drive/symmetric"][...])
 
     return system
+
+
+def steadystate(epsd: ArrayLike, sigd: ArrayLike, **kwargs):
+    """
+    Estimate the first increment of the steady-state, with additional constraints:
+    -   Skip at least two increments.
+    -   Start with elastic loading.
+
+    :param epsd: Strain history [ninc].
+    :param sigd: Stress history [ninc].
+    :return: Increment number.
+    """
+
+    K = np.empty_like(sigd)
+    K[0] = np.inf
+    K[1:] = (sigd[1:] - sigd[0]) / (epsd[1:] - epsd[0])
+
+    steadystate = max(2, np.argmax(K <= 0.95 * K[1]))
+    return steadystate

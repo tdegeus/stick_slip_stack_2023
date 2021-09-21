@@ -6,6 +6,23 @@ from typing import TypeVar
 import h5py
 
 
+def dset_extendible1d(file: h5py.File, key: str, dtype, value: TypeVar("T"), **kwargs):
+    """
+    Create extendible 1d dataset and store the first value.
+
+    :param file: Opened HDF5 file.
+    :param key: Path to the dataset.
+    :param dtype: Data-type to use.
+    :param value: Value to write at index 0.
+    """
+
+    dset = file.create_dataset(key, (1,), maxshape=(None,), dtype=dtype)
+    dset[0] = value
+
+    for attr in kwargs:
+        file[key].attrs[attr] = kwargs[attr]
+
+
 def dset_extend1d(file: h5py.File, key: str, i: int, value: TypeVar("T")):
     """
     Dump and auto-extend a 1d extendible dataset.

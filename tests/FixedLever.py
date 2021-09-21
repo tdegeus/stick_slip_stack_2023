@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 import unittest
 
@@ -8,10 +9,18 @@ import mycode_lever as my  # noqa: E402
 
 
 class MyTests(unittest.TestCase):
-    def test_run(self):
+    def test_small(self):
+
+        dirname = "mytest"
+        idname = "id=0.h5"
+        filename = os.path.join(dirname, idname)
+        infoname = os.path.join(dirname, "EnsembleInfo.h5")
+
+        if not os.path.isdir(dirname):
+            os.makedirs(dirname)
 
         my.FixedLever.generate(
-            filename="mytest.h5",
+            filename=filename,
             N=9,
             nplates=2,
             seed=0,
@@ -19,6 +28,11 @@ class MyTests(unittest.TestCase):
             symmetric=True,
             delta_gamma=[0, 0.005, 0.01],
         )
+
+        my.FixedLever.cli_run([filename, "-f"])
+        my.FixedLever.cli_ensembleinfo(["-o", infoname, filename])
+
+        shutil.rmtree(dirname)
 
 
 if __name__ == "__main__":
