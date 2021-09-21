@@ -790,7 +790,9 @@ def cli_ensembleinfo(cli_args=None):
         output["seeds"] = seeds
 
 
-def view_paraview(system: model.System, file: h5py.File, outbasename: str, verbose: bool = True) -> dict:
+def view_paraview(
+    system: model.System, file: h5py.File, outbasename: str, verbose: bool = True
+) -> dict:
     """
     Write ParaView file
 
@@ -833,9 +835,7 @@ def view_paraview(system: model.System, file: h5py.File, outbasename: str, verbo
                 xh.Unstructured(output, "/coor", "/conn", "Quadrilateral"),
                 xh.Attribute(output, f"/disp/{inc:d}", "Node", name="Displacement"),
                 xh.Attribute(output, f"/sigd/{inc:d}", "Cell", name="Stress"),
-                xh.Attribute(
-                    output, f"/epsp/{inc:d}", "Cell", name="Plastic strain"
-                ),
+                xh.Attribute(output, f"/epsp/{inc:d}", "Cell", name="Plastic strain"),
             )
 
         xh.write(series, f"{outbasename}.xdmf")
@@ -911,15 +911,14 @@ def cli_view_paraview(cli_args=None):
 
     for i, filepath in enumerate(tqdm.tqdm(args.files)):
 
-            with h5py.File(filepath, "r") as file:
+        with h5py.File(filepath, "r") as file:
 
-                if i == 0:
-                    system = System.init(file)
-                else:
-                    system.reset_epsy(System.read_epsy(file))
+            if i == 0:
+                system = System.init(file)
+            else:
+                system.reset_epsy(System.read_epsy(file))
 
-                dirname, filename = os.path.split(filepath)
-                outbasename = f"{args.prefix:s}{os.path.splitext(filename)[0]:s}"
-                outbasename = os.path.join(dirname, outbasename)
-                view_paraview(system, file, outbasename, verbose=False)
-
+            dirname, filename = os.path.split(filepath)
+            outbasename = f"{args.prefix:s}{os.path.splitext(filename)[0]:s}"
+            outbasename = os.path.join(dirname, outbasename)
+            view_paraview(system, file, outbasename, verbose=False)

@@ -21,7 +21,7 @@ PenaltyReturnTypeOnItsOwnLine: 100
 PointerBindsToType: true
 BreakBeforeBraces: Stroustrup
 BraceWrapping:
-    AfterFunction: true
-    AfterClass: false
-    BeforeCatch: true
-    BeforeElse: true
+  AfterFunction: true
+  AfterClass: false
+  BeforeCatch: true
+  BeforeElse: true
