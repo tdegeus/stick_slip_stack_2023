@@ -760,34 +760,42 @@ def cli_ensembleinfo(cli_args=None):
     ]
 
     with h5py.File(args.output, "w") as output:
+        pass
 
-        for i, (filename, filepath) in enumerate(zip(tqdm.tqdm(files), args.files)):
 
-            with h5py.File(filepath, "r") as file:
+    for i, (filename, filepath) in enumerate(zip(tqdm.tqdm(files), args.files)):
 
-                if i == 0:
-                    system = System.init(file)
-                else:
-                    system.reset_epsy(System.read_epsy(file))
+        with h5py.File(filepath, "r") as file:
 
-                out = basic_output(system, file, verbose=False)
+            # (re)initialise system
+            if i == 0:
+                system = System.init(file)
+            else:
+                system.reset_epsy(System.read_epsy(file))
 
+            # read output
+            out = basic_output(system, file, verbose=False)
+            seeds += [out["seed"]]
+
+            # store/check normalisation
+            if i == 0:
+                norm = {key: out[key] for key in fields_norm}
+            else:
+                for key in fields_norm:
+                    assert np.isclose(norm[key], out[key])
+
+            # write full output
+            with h5py.File(args.output, "a") as output:
                 for key in fields_full:
                     output[f"/full/{filename}/{key}"] = out[key]
 
-                seeds += [out["seed"]]
+        # write normalisation and global info
+        with h5py.File(args.output, "a") as output:
+            for key, value in norm.items():
+                output[f"/normalisation/{key}"] = value
 
-                if i == 0:
-                    norm = {key: out[key] for key in fields_norm}
-                else:
-                    for key in fields_norm:
-                        assert np.isclose(norm[key], out[key])
-
-        for key, value in norm.items():
-            output[f"/normalisation/{key}"] = value
-
-        output["files"] = files
-        output["seeds"] = seeds
+            output["files"] = files
+            output["seeds"] = seeds
 
 
 def view_paraview(
