@@ -10,6 +10,7 @@ import GooseFEM
 import h5py
 import numpy as np
 import tqdm
+import XDMFWrite_h5py as xh
 
 from . import mesh
 from . import storage
@@ -637,7 +638,7 @@ def basic_output(system: model.System, file: h5py.File, verbose: bool = True) ->
     ret["layers_ux"] = np.zeros((ninc, nlayer), dtype=float)
     ret["layers_tx"] = np.zeros((ninc, nlayer), dtype=float)
 
-    for inc in tqdm.tqdm(incs):
+    for inc in tqdm.tqdm(incs, disable=not verbose):
 
         ubar = file[f"/drive/ubar/{inc:d}"][...]
         system.layerSetTargetUbar(ubar)
@@ -720,6 +721,7 @@ def cli_ensembleinfo(cli_args=None):
 
     args = parser.parse_args(cli_args)
 
+    assert len(args.files) > 0
     assert np.all([os.path.isfile(os.path.realpath(file)) for file in args.files])
     files = [os.path.relpath(file, os.path.dirname(args.output)) for file in args.files]
     seeds = []
@@ -786,3 +788,138 @@ def cli_ensembleinfo(cli_args=None):
 
         output["files"] = files
         output["seeds"] = seeds
+
+
+def view_paraview(system: model.System, file: h5py.File, outbasename: str, verbose: bool = True) -> dict:
+    """
+    Write ParaView file
+
+    :param system: The system (modified: all increments visited).
+    :param file: Open simulation HDF5 archive (read-only).
+    :param outbasename: Basename of the output files (appended ".h5" and ".xdmf")
+    :param verbose: Print progress.
+    """
+
+    assert not os.path.isfile(os.path.realpath(f"{outbasename}.h5"))
+    assert not os.path.isfile(os.path.realpath(f"{outbasename}.xdmf"))
+
+    with h5py.File(f"{outbasename}.h5", "w") as output:
+
+        dV = system.quad().AsTensor(2, system.quad().dV())
+        sig0 = file["/meta/normalisation/sig"][...]
+        eps0 = file["/meta/normalisation/eps"][...]
+
+        output["/coor"] = system.coor()
+        output["/conn"] = system.conn()
+
+        series = xh.TimeSeries()
+
+        for inc in tqdm.tqdm(file["/stored"][...], disable=not verbose):
+
+            system.layerSetTargetUbar(file[f"/drive/ubar/{inc:d}"][...])
+
+            u = file[f"/disp/{inc:d}"][...]
+            system.setU(u)
+
+            Sig = GMat.Sigd(np.average(system.Sig() / sig0, weights=dV, axis=1))
+            Epsp = np.zeros_like(Sig)
+            Epsp[system.plastic()] = np.mean(system.plastic_Epsp() / eps0, axis=1)
+
+            output[f"/disp/{inc:d}"] = xh.as3d(u)
+            output[f"/sigd/{inc:d}"] = Sig
+            output[f"/epsp/{inc:d}"] = Epsp
+
+            series.push_back(
+                xh.Unstructured(output, "/coor", "/conn", "Quadrilateral"),
+                xh.Attribute(output, f"/disp/{inc:d}", "Node", name="Displacement"),
+                xh.Attribute(output, f"/sigd/{inc:d}", "Cell", name="Stress"),
+                xh.Attribute(
+                    output, f"/epsp/{inc:d}", "Cell", name="Plastic strain"
+                ),
+            )
+
+        xh.write(series, f"{outbasename}.xdmf")
+
+
+def cli_view_paraview(cli_args=None):
+    """
+    Create files to view with ParaView.
+    """
+
+    if cli_args is None:
+        cli_args = sys.argv[1:]
+    else:
+        cli_args = [str(arg) for arg in cli_args]
+
+    class MyFormatter(
+        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
+    ):
+        pass
+
+    parser = argparse.ArgumentParser(
+        formatter_class=MyFormatter,
+        description=textwrap.dedent(cli_view_paraview.__doc__),
+    )
+
+    parser.add_argument(
+        "-p",
+        "--prefix",
+        type=str,
+        default="paraview_",
+        help="Prefix files to create dedicated Paraview files.",
+    )
+
+    parser.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help="Force overwrite of output file if it exists",
+    )
+
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=version,
+    )
+
+    parser.add_argument("files", nargs="*", type=str, help="Files to read")
+
+    args = parser.parse_args(cli_args)
+
+    assert len(args.files) > 0
+    assert np.all([os.path.isfile(os.path.realpath(file)) for file in args.files])
+
+    if not args.force:
+
+        overwrite = False
+
+        for filepath in args.files:
+            dirname, filename = os.path.split(filepath)
+            outbasename = f"{args.prefix:s}{os.path.splitext(filename)[0]:s}"
+            outbasename = os.path.join(dirname, outbasename)
+            if os.path.exists(f"{outbasename}.h5"):
+                overwrite = True
+                break
+            if os.path.exists(f"{outbasename}.xdmf"):
+                overwrite = True
+                break
+
+        if overwrite:
+            if not click.confirm("Overwrite existing output?"):
+                raise OSError("Cancelled")
+
+    for i, filepath in enumerate(tqdm.tqdm(args.files)):
+
+            with h5py.File(filepath, "r") as file:
+
+                if i == 0:
+                    system = System.init(file)
+                else:
+                    system.reset_epsy(System.read_epsy(file))
+
+                dirname, filename = os.path.split(filepath)
+                outbasename = f"{args.prefix:s}{os.path.splitext(filename)[0]:s}"
+                outbasename = os.path.join(dirname, outbasename)
+                view_paraview(system, file, outbasename, verbose=False)
+

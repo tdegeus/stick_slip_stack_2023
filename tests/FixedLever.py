@@ -31,6 +31,7 @@ class MyTests(unittest.TestCase):
 
         my.FixedLever.cli_run([filename, "-f"])
         my.FixedLever.cli_ensembleinfo(["-o", infoname, filename])
+        my.FixedLever.cli_view_paraview([filename])
 
         shutil.rmtree(dirname)
 
