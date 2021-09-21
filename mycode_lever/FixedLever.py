@@ -11,6 +11,8 @@ from . import tag
 from . import mesh
 from ._version import version
 
+system = "FixedLever"
+
 def dset_extend1d(data: h5py.File, key: str, i: int, value):
 
     dset = data[key]
@@ -223,6 +225,27 @@ def generate(filename: str, N: int, nplates: int, seed: int, k_drive: float, sym
 
         mysave(
             data,
+            "/elastic/elem",
+            elastic,
+            desc="Elastic elements [nelem - N]",
+        )
+
+        mysave(
+            data,
+            "/elastic/K",
+            K * np.ones(len(elastic)),
+            desc="Bulk modulus for elements in '/elastic/elem' [nelem - N]",
+        )
+
+        mysave(
+            data,
+            "/elastic/G",
+            G * np.ones(len(elastic)),
+            desc="Shear modulus for elements in '/elastic/elem' [nelem - N]",
+        )
+
+        mysave(
+            data,
             "/cusp/elem",
             plastic,
             desc="Plastic elements with cusp potential [nplastic]",
@@ -282,27 +305,6 @@ def generate(filename: str, N: int, nplates: int, seed: int, k_drive: float, sym
             "/cusp/epsy/nchunk",
             nchunk,
             desc="Chunk size",
-        )
-
-        mysave(
-            data,
-            "/elastic/elem",
-            elastic,
-            desc="Elastic elements [nelem - N]",
-        )
-
-        mysave(
-            data,
-            "/elastic/K",
-            K * np.ones(len(elastic)),
-            desc="Bulk modulus for elements in '/elastic/elem' [nelem - N]",
-        )
-
-        mysave(
-            data,
-            "/elastic/G",
-            G * np.ones(len(elastic)),
-            desc="Shear modulus for elements in '/elastic/elem' [nelem - N]",
         )
 
         mysave(
@@ -447,20 +449,20 @@ def run(filename: str, dev: bool):
         assert dev or not tag.has_uncommited(version)
         assert dev or not tag.any_has_uncommited(model.version_dependencies())
 
-        path = "/meta/RunFixedLever/version"
+        path = f"/meta/Run{system}/version"
         if version != "None":
             if path in data:
                 assert tag.greater_equal(version, str(data[path].asstr()[...]))
             else:
                 data[path] = version
 
-        path = "/meta/RunFreeLever/version_dependencies"
+        path = f"/meta/Run{system}/version_dependencies"
         if path in data:
             assert tag.all_greater_equal(model.version_dependencies(), data[path].asstr()[...])
         else:
             data[path] = model.version_dependencies()
 
-        if "/meta/RunFixedLever/completed" in data:
+        if f"/meta/Run{system}/completed" in data:
             print("Marked completed, skipping")
             return 1
 
