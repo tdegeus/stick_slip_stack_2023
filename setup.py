@@ -13,6 +13,7 @@ setup(
     entry_points={
         "console_scripts": [
             "FixedLever = mycode_lever.FixedLever:cli_run",
+            "FixedLever_EnsembleInfo = mycode_lever.FixedLever:cli_ensembleinfo",
         ]
     },
 )
