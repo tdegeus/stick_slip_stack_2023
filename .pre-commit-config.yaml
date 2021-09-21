@@ -39,12 +39,6 @@ repos:
       "--max-line-length=110",
       "--per-file-ignores=mycode_lever/__init__.py:F401"
     ]
-# check docstrings
-# - repo: https://github.com/econchick/interrogate
-#   rev: 1.4.0
-#   hooks:
-#     - id: interrogate
-#       args: [-vv, -i, --fail-under=80]
 - repo: https://github.com/asottile/setup-cfg-fmt
   rev: v1.17.0
   hooks:
@@ -54,3 +48,9 @@ repos:
   hooks:
   - id: clang-format
     args: [-i]
+# check docstrings
+# - repo: https://github.com/econchick/interrogate
+#   rev: 1.4.0
+#   hooks:
+#     - id: interrogate
+#       args: [-vv, -i, --fail-under=80]
