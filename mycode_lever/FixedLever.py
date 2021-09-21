@@ -16,9 +16,12 @@ from . import mesh
 from . import storage
 from . import System
 from . import tag
+from . import slurm
 from ._version import version
 
 config = "FixedLever"
+
+entry_runinc_event_basic = "FixedLever_Events"
 
 
 def generate(
@@ -581,6 +584,242 @@ def cli_run(cli_args=None):
 
     assert os.path.isfile(os.path.realpath(args.file))
     run(args.file, dev=args.force)
+
+
+def runinc_event_basic(system: model.System, file: h5py.File, inc: int) -> dict:
+    """
+    Rerun increment and get basic event information.
+
+    :param system: The system (modified: all increments visited).
+    :param file: Open simulation HDF5 archive (read-only).
+    :param inc: The increment to return.
+    :return: Dictionary:
+        ``r`` : Position with columns (layer, block).
+        ``t`` : Time of each row in ``r``.
+    """
+
+    stored = file["/stored"][...]
+    N = file["/meta/normalisation/N"][...]
+
+    assert inc > 0
+    assert inc in stored
+    assert inc - 1 in stored
+
+    system.layerSetTargetUbar(file[f"/drive/ubar/{inc - 1:d}"][...])
+    system.setU(file[f"/disp/{inc - 1:d}"][...])
+
+    idx_n = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, N)
+
+    height = file["/drive/height"][...]
+    dgamma = file["/drive/delta_gamma"][inc]
+
+    system.layerTagetUbar_addAffineSimpleShear(dgamma, height)
+
+    R = []
+    T = []
+
+    while True:
+
+        niter = system.timeStepsUntilEvent()
+
+        idx = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, N)
+        t = system.t()
+
+        for r in np.argwhere(idx != idx_n):
+            R += [list(r)]
+            T += [t]
+
+        idx_n = np.array(idx, copy=True)
+
+        if niter == 0:
+            break
+
+    return dict(
+        r = np.array(R),
+        t = np.array(T)
+    )
+
+
+def cli_rerun_event(cli_args=None):
+    """
+    Rerun increments and store basic event info.
+    """
+
+    if cli_args is None:
+        cli_args = sys.argv[1:]
+    else:
+        cli_args = [str(arg) for arg in cli_args]
+
+    class MyFormatter(
+        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
+    ):
+        pass
+
+    parser = argparse.ArgumentParser(
+        formatter_class=MyFormatter,
+        description=textwrap.dedent(cli_rerun_event.__doc__),
+    )
+
+    parser.add_argument(
+        "file",
+        type=str,
+        help="Simulation file",
+    )
+
+    parser.add_argument(
+        "-i",
+        "--inc",
+        required=True,
+        type=int,
+        help="Increment number",
+    )
+
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        default="events.h5",
+        help="Output file",
+    )
+
+    parser.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help="Overwrite existing output / Allow uncommitted changed",
+    )
+
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=version,
+    )
+
+    args = parser.parse_args(cli_args)
+
+    assert os.path.isfile(os.path.realpath(args.file))
+
+    if not args.force:
+        if os.path.isfile(args.output):
+            if not click.confirm(f'Overwrite "{args.output}"?'):
+                raise OSError("Cancelled")
+
+    with h5py.File(args.file, "r") as file:
+        system = System.init(file)
+        ret = runinc_event_basic(system, file, args.inc)
+
+    with h5py.File(args.output, "w") as file:
+        file["r"] = ret["r"]
+        file["t"] = ret["t"]
+
+
+def cli_job_rerun_multislip(cli_args=None):
+    """
+    Rerun increments that have events in which more than one layer slips.
+    """
+
+    if cli_args is None:
+        cli_args = sys.argv[1:]
+    else:
+        cli_args = [str(arg) for arg in cli_args]
+
+    class MyFormatter(
+        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
+    ):
+        pass
+
+    parser = argparse.ArgumentParser(
+        formatter_class=MyFormatter,
+        description=textwrap.dedent(cli_job_rerun_multislip.__doc__),
+    )
+
+    parser.add_argument("info", type=str, help="EnsembleInfo (read-only)")
+
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        default=os.getcwd(),
+        help="Output directory"
+    )
+
+    parser.add_argument(
+        "-c",
+        "--conda",
+        type=str,
+        default=slurm.default_condabase,
+        help="Base name of the conda environment, appended '_E5v4' and '_s6g1'",
+    )
+
+    parser.add_argument(
+        "-n",
+        "--group",
+        type=int,
+        default=10,
+        help="Number of pushes to group in a single job",
+    )
+
+    parser.add_argument(
+        "-w",
+        "--time",
+        type=str,
+        default="24h",
+        help="Wall-time to allocate for the job",
+    )
+
+    parser.add_argument(
+        "-e",
+        "--executable",
+        type=str,
+        default=entry_runinc_event_basic,
+        help="Executable to use",
+    )
+
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=version,
+    )
+
+    args = parser.parse_args(cli_args)
+
+    assert os.path.isfile(os.path.realpath(args.info))
+    assert os.path.isdir(os.path.realpath(args.output))
+
+    basedir = os.path.dirname(args.info)
+    executable = args.executable
+
+    commands = []
+
+
+    with h5py.File(args.info, "r") as data:
+
+        files = [os.path.join(basedir, f) for f in data["/files"].asstr()[...]]
+        N = data["/normalisation/N"][...]
+
+        for full in data["/files"].asstr()[...]:
+            S = data[f"/full/{full}/S_layers"][...]
+            incs = np.argwhere(np.sum(S > 0, axis=1) > 1).ravel()
+
+            if len(incs) == 0:
+                continue
+
+            simid = os.path.splitext(os.path.basename(full))[0]
+            filepath = os.path.join(basedir, full)
+            relfile = os.path.relpath(filepath, args.output)
+
+            for i in incs:
+                commands += [f"{executable} -i {i:d} -o {simid}_inc={i:d}.h5 {relfile}"]
+
+    slurm.serial_group(
+        commands,
+        basename=args.executable.replace(" ", "_"),
+        group=args.group,
+        outdir=args.output,
+        sbatch={"time": args.time},
+    )
 
 
 def basic_output(system: model.System, file: h5py.File, verbose: bool = True) -> dict:

@@ -14,6 +14,8 @@ setup(
         "console_scripts": [
             "FixedLever = mycode_lever.FixedLever:cli_run",
             "FixedLever_EnsembleInfo = mycode_lever.FixedLever:cli_ensembleinfo",
+            "FixedLever_Events = mycode_lever.FixedLever:cli_rerun_event",
+            "FixedLever_EventsJob = mycode_lever.FixedLever:cli_job_rerun_multislip",
         ]
     },
 )
