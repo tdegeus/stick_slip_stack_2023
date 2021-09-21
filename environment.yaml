@@ -26,6 +26,7 @@ dependencies:
 - setuptools_scm
 - shelephant
 - tqdm
+- XDMFWrite_h5py
 - xsimd
 - xtensor
 - xtensor-python
