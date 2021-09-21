@@ -1,8 +1,9 @@
 import argparse
+import os
+
 import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
 import h5py
 import numpy as np
-import os
 import prrng
 import tqdm
 import XDMFWrite_h5py as xh

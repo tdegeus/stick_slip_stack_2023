@@ -1,7 +1,8 @@
 import argparse
+import os
+
 import GooseHDF5 as g5
 import h5py
-import os
 from setuptools_scm import get_version
 
 version = get_version(root=os.path.join(os.path.dirname(__file__), ".."))

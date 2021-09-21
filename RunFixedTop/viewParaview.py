@@ -1,12 +1,13 @@
 import argparse
 import os
-import tqdm
+
+import FrictionQPotFEM.UniformSingleLayer2d as model
+import GMatElastoPlasticQPot.Cartesian2d as GMat
+import GooseFEM  # noqa: F401
 import h5py
 import numpy as np
 import prrng
-import GooseFEM  # noqa: F401
-import GMatElastoPlasticQPot.Cartesian2d as GMat
-import FrictionQPotFEM.UniformSingleLayer2d as model
+import tqdm
 import XDMFWrite_h5py as xh
 
 parser = argparse.ArgumentParser()
