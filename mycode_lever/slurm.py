@@ -149,7 +149,7 @@ def serial_group(
     sbatch.setdefault("ntasks", 1)
     sbatch.setdefault("cpus-per-task", 1)
     sbatch.setdefault("time", "24h")
-    sbatch.setdefault("account", "pcsl")
+    sbatch.setdefault("account", "flexlab-frictionlayers")
     sbatch.setdefault("partition", "serial")
 
     if flush:
