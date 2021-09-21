@@ -5,6 +5,7 @@ from typing import TypeVar
 
 import h5py
 
+
 def dset_extend1d(file: h5py.File, key: str, i: int, value: TypeVar("T")):
     """
     Dump and auto-extend a 1d extendible dataset.
@@ -34,4 +35,3 @@ def dump_with_atttrs(file: h5py.File, key: str, data: TypeVar("T"), **kwargs):
     file[key] = data
     for attr in kwargs:
         file[key].attrs[attr] = kwargs[attr]
-

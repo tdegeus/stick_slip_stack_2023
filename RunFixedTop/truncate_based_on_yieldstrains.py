@@ -1,9 +1,10 @@
 import argparse
+import os
+
 import FrictionQPotFEM.UniformSingleLayer2d as model
 import GooseHDF5 as g5
 import h5py
 import numpy as np
-import os
 import prrng
 import tqdm
 

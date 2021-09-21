@@ -1,7 +1,7 @@
-import prrng
-import numpy as np
 import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
 import h5py
+import numpy as np
+import prrng
 
 
 def read_epsy(data: h5py.File) -> np.ndarray:

@@ -1,10 +1,11 @@
 import argparse
+import os
+
 import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
 import GMatElastoPlasticQPot.Cartesian2d as GMat
 import GooseFEM  # noqa: F401
 import h5py
 import numpy as np
-import os
 import prrng
 import tqdm
 import XDMFWrite_h5py as xh

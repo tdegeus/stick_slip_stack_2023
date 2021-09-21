@@ -1,20 +1,29 @@
 import argparse
-import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
-import h5py
 import os
-import GooseFEM
-import numpy as np
-import unittest
 
+import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
+import GooseFEM
+import h5py
+import numpy as np
+
+from . import mesh
+from . import storage
 from . import system
 from . import tag
-from . import storage
-from . import mesh
 from ._version import version
 
-system = "FixedLever"
+config = "FixedLever"
 
-def generate(filename: str, N: int, nplates: int, seed: int, k_drive: float, symmetric: bool = True, delta_gamma: float=None):
+
+def generate(
+    filename: str,
+    N: int,
+    nplates: int,
+    seed: int,
+    k_drive: float,
+    symmetric: bool = True,
+    delta_gamma: float = None,
+):
     """
     Generate an input file.
 
@@ -352,7 +361,7 @@ def generate(filename: str, N: int, nplates: int, seed: int, k_drive: float, sym
 
         storage.dump_with_atttrs(
             data,
-            f"/meta/Run{system}/version",
+            f"/meta/Run{config}/version",
             version,
             desc="Version when generating",
         )
@@ -414,9 +423,6 @@ def generate(filename: str, N: int, nplates: int, seed: int, k_drive: float, sym
         )
 
 
-
-
-
 def run(filename: str, dev: bool):
     """
     Run the simulation.
@@ -436,20 +442,22 @@ def run(filename: str, dev: bool):
         assert dev or not tag.has_uncommited(version)
         assert dev or not tag.any_has_uncommited(model.version_dependencies())
 
-        path = f"/meta/Run{system}/version"
+        path = f"/meta/Run{config}/version"
         if version != "None":
             if path in data:
                 assert tag.greater_equal(version, str(data[path].asstr()[...]))
             else:
                 data[path] = version
 
-        path = f"/meta/Run{system}/version_dependencies"
+        path = f"/meta/Run{config}/version_dependencies"
         if path in data:
-            assert tag.all_greater_equal(model.version_dependencies(), data[path].asstr()[...])
+            assert tag.all_greater_equal(
+                model.version_dependencies(), data[path].asstr()[...]
+            )
         else:
             data[path] = model.version_dependencies()
 
-        if f"/meta/Run{system}/completed" in data:
+        if f"/meta/Run{config}/completed" in data:
             print("Marked completed, skipping")
             return 1
 
@@ -461,24 +469,32 @@ def run(filename: str, dev: bool):
             this.setT(data["/t"][inc])
             this.setU(data[f"/disp/{inc:d}"][...])
             this.layerSetTargetUbar(data[f"/drive/ubar/{inc:d}"][...])
-            print(f"\"{basename}\": Loading, inc = {inc:d}")
+            print(f'"{basename}": Loading, inc = {inc:d}')
 
         else:
 
             inc = int(0)
 
-            dset = data.create_dataset("/stored", (1, ), maxshape=(None, ), dtype=np.uint64)
+            dset = data.create_dataset(
+                "/stored", (1,), maxshape=(None,), dtype=np.uint64
+            )
             dset[0] = inc
-            dset.attrs["desc"] = "List of increments in \"/disp/{:d}\" and \"/drive/ubar/{0:d}\""
+            dset.attrs[
+                "desc"
+            ] = 'List of increments in "/disp/{:d}" and "/drive/ubar/{0:d}"'
 
-            dset = data.create_dataset("/t", (1, ), maxshape=(None, ), dtype=np.float64)
+            dset = data.create_dataset("/t", (1,), maxshape=(None,), dtype=np.float64)
             dset[0] = this.t()
             dset.attrs["desc"] = "Per increment: time at the end of the increment"
 
             data[f"/disp/{inc}"] = this.u()
-            data[f"/disp/{inc}"].attrs["desc"] = "Displacement (at the end of the increment)."
+            data[f"/disp/{inc}"].attrs[
+                "desc"
+            ] = "Displacement (at the end of the increment)."
             data[f"/drive/ubar/{inc}"] = this.layerTargetUbar()
-            data[f"/drive/ubar/{inc}"].attrs["desc"] = "Position of the loading frame of each layer."
+            data[f"/drive/ubar/{inc}"].attrs[
+                "desc"
+            ] = "Position of the loading frame of each layer."
 
         # run
 
@@ -492,7 +508,7 @@ def run(filename: str, dev: bool):
 
             this.layerTagetUbar_addAffineSimpleShear(dgamma, height)
             niter = this.minimise()
-            print(f"\"{basename}\": inc = {inc:8d}, niter = {niter:8d}")
+            print(f'"{basename}": inc = {inc:8d}, niter = {niter:8d}')
 
             storage.dset_extend1d(data, "/stored", inc, inc)
             storage.dset_extend1d(data, "/t", inc, this.t())
@@ -515,5 +531,3 @@ def cli_run():
     assert os.path.isfile(os.path.realpath(args.file))
 
     run(args.file, args.dev)
-
-

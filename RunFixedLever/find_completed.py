@@ -1,7 +1,8 @@
 import argparse
+import os
+
 import h5py
 import numpy as np
-import os
 import shelephant.yaml
 import tqdm
 

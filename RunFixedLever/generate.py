@@ -1,9 +1,10 @@
 import argparse
+import itertools
+import os
+
 import GooseFEM
 import h5py
-import itertools
 import numpy as np
-import os
 import setuptools_scm
 
 # import prrng
