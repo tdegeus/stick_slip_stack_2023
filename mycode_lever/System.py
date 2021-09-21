@@ -4,20 +4,20 @@ import numpy as np
 import prrng
 
 
-def read_epsy(data: h5py.File) -> np.ndarray:
+def read_epsy(file: h5py.File) -> np.ndarray:
     """
     Regenerate yield strain sequence per plastic element.
     The output shape is given by the stored ``initstate``.
 
-    :param data: Opened simulation archive.
+    :param file: Opened simulation archive.
     """
 
-    initstate = data["/cusp/epsy/initstate"][...]
-    initseq = data["/cusp/epsy/initseq"][...]
-    eps_offset = data["/cusp/epsy/eps_offset"][...]
-    eps0 = data["/cusp/epsy/eps0"][...]
-    k = data["/cusp/epsy/k"][...]
-    nchunk = data["/cusp/epsy/nchunk"][...]
+    initstate = file["/cusp/epsy/initstate"][...]
+    initseq = file["/cusp/epsy/initseq"][...]
+    eps_offset = file["/cusp/epsy/eps_offset"][...]
+    eps0 = file["/cusp/epsy/eps0"][...]
+    k = file["/cusp/epsy/k"][...]
+    nchunk = file["/cusp/epsy/nchunk"][...]
 
     generators = prrng.pcg32_array(initstate, initseq)
 
@@ -29,37 +29,35 @@ def read_epsy(data: h5py.File) -> np.ndarray:
     return epsy
 
 
-def initsystem(data: h5py.File) -> model.System:
+def init(file: h5py.File) -> model.System:
     """
-    Restore system.
+    Initialise system from file.
 
-    :param data: Opened simulation archive.
+    :param file: Open simulation HDF5 archive (read-only).
+    :return: The initialised system.
     """
 
-    layers = data["/layers/stored"][...]
+    layers = file["/layers/stored"][...]
 
     system = model.System(
-        data["/coor"][...],
-        data["/conn"][...],
-        data["/dofs"][...],
-        data["/iip"][...],
-        [data[f"/layers/{layer:d}/elemmap"][...] for layer in layers],
-        [data[f"/layers/{layer:d}/nodemap"][...] for layer in layers],
-        data["/layers/is_plastic"][...],
+        file["coor"][...],
+        file["conn"][...],
+        file["dofs"][...],
+        file["iip"][...],
+        [file[f"/layers/{layer:d}/elemmap"][...] for layer in layers],
+        [file[f"/layers/{layer:d}/nodemap"][...] for layer in layers],
+        file["/layers/is_plastic"][...],
     )
 
-    system.setDt(data["/run/dt"][...])
-    system.setMassMatrix(data["/rho"][...])
-    system.setDampingMatrix(data["/damping/alpha"][...])
+    system.setMassMatrix(file["rho"][...])
+    system.setDampingMatrix(file["/damping/alpha"][...])
 
-    system.setElastic(data["/elastic/K"][...], data["/elastic/G"][...])
-    system.setPlastic(
-        data["/cusp/K"][...],
-        data["/cusp/G"][...],
-        read_epsy(data),
-    )
+    system.setElastic(file["/elastic/K"][...], file["/elastic/G"][...])
+    system.setPlastic(file["/cusp/K"][...], file["/cusp/G"][...], read_epsy(file))
 
-    system.layerSetTargetActive(data["/drive/drive"][...])
-    system.layerSetDriveStiffness(data["/drive/k"][...], data["/drive/symmetric"][...])
+    system.setDt(file["/run/dt"][...])
+
+    system.layerSetTargetActive(file["/drive/drive"][...])
+    system.layerSetDriveStiffness(file["/drive/k"][...], file["/drive/symmetric"][...])
 
     return system
