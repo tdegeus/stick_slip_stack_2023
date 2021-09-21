@@ -759,9 +759,8 @@ def cli_ensembleinfo(cli_args=None):
         "height",
     ]
 
-    with h5py.File(args.output, "w") as output:
-        pass
-
+    if os.path.exists(args.output):
+        os.remove(args.output)
 
     for i, (filename, filepath) in enumerate(zip(tqdm.tqdm(files), args.files)):
 
@@ -789,13 +788,13 @@ def cli_ensembleinfo(cli_args=None):
                 for key in fields_full:
                     output[f"/full/{filename}/{key}"] = out[key]
 
-        # write normalisation and global info
-        with h5py.File(args.output, "a") as output:
-            for key, value in norm.items():
-                output[f"/normalisation/{key}"] = value
+    # write normalisation and global info
+    with h5py.File(args.output, "a") as output:
+        for key, value in norm.items():
+            output[f"/normalisation/{key}"] = value
 
-            output["files"] = files
-            output["seeds"] = seeds
+        output["files"] = files
+        output["seeds"] = seeds
 
 
 def view_paraview(
