@@ -761,7 +761,7 @@ def cli_ensembleinfo(cli_args=None):
 
     with h5py.File(args.output, "w") as output:
 
-        for i, (filename, filepath) in enumerate(tqdm.tqdm(zip(files, args.files))):
+        for i, (filename, filepath) in enumerate(zip(tqdm.tqdm(files), args.files)):
 
             with h5py.File(filepath, "r") as file:
 
