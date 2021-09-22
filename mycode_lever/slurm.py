@@ -151,6 +151,9 @@ def serial_group(
     :param flush: Flush the buffer of stdout for each commands.
     """
 
+    if len(commands) == 0:
+        return
+
     assert "job-name" not in sbatch
     assert "out" not in sbatch
     sbatch.setdefault("nodes", 1)
