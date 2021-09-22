@@ -9,6 +9,14 @@ import numpy as np
 default_condabase = "code_layers"
 default_condaexec = "~/miniconda3/etc/profile.d/conda.sh"
 
+entry_points = dict(
+    cli_serial_group="JobSerialGroup",
+)
+
+slurm_defaults = dict(
+    account="flexlab-frictionlayers",
+)
+
 
 def snippet_echo_jobid():
     """
@@ -18,7 +26,7 @@ def snippet_echo_jobid():
     return textwrap.dedent(
         """
         # print jobid
-        echo "SLURM_JOBID = ${{SLURM_JOBID}}"
+        echo "SLURM_JOBID = ${SLURM_JOBID}"
         echo ""
         """
     )
@@ -149,7 +157,7 @@ def serial_group(
     sbatch.setdefault("ntasks", 1)
     sbatch.setdefault("cpus-per-task", 1)
     sbatch.setdefault("time", "24h")
-    sbatch.setdefault("account", "flexlab-frictionlayers")
+    sbatch.setdefault("account", slurm_defaults["account"])
     sbatch.setdefault("partition", "serial")
 
     if flush:
