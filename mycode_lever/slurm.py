@@ -23,13 +23,7 @@ def snippet_echo_jobid():
     Return code to echo the job-id.
     :return: str
     """
-    return textwrap.dedent(
-        """
-        # print jobid
-        echo "SLURM_JOBID = ${SLURM_JOBID}"
-        echo ""
-        """
-    )
+    return '# Print JOBID for later debugging\necho "SLURM_JOBID = ${SLURM_JOBID}"'
 
 
 def snippet_export_omp_num_threads(ncores=1):
@@ -37,12 +31,7 @@ def snippet_export_omp_num_threads(ncores=1):
     Return code to set OMP_NUM_THREADS
     :return: str
     """
-    return textwrap.dedent(
-        f"""
-        # set the number of cores to use by OMP
-        export OMP_NUM_THREADS={ncores}
-        """
-    )
+    return f'# Set number of cores to use\nexport OMP_NUM_THREADS={ncores}'
 
 
 def snippet_load_conda(
@@ -55,23 +44,74 @@ def snippet_load_conda(
     :return: str
     """
 
-    return textwrap.dedent(
-        f"""
-        # load conda environment
-        source {condaexec}
-
-        if [[ "${{SYS_TYPE}}" == *E5v4* ]]; then
-            conda activate {condabase}_E5v4
-        elif [[ "${{SYS_TYPE}}" == *s6g1* ]]; then
-            conda activate {condabase}_s6g1
-        elif [[ "${{SYS_TYPE}}" == *S6g1* ]]; then
-            conda activate {condabase}_s6g1
-        else
-            echo "Unknown SYS_TYPE ${{SYS_TYPE}}"
-            exit 1
-        fi
+    ret = ["# --- Load Conda environment ---", ""]
+    ret += [f"source {default_condaexec}"]
+    ret += [textwrap.dedent(
         """
-    )
+        contains ()
+        {
+            local e match="$1"
+            shift
+            for e; do [[ "$e" == "$match" ]] && return 0; done
+            return 1
+        }
+
+        conda_reactivate ()
+        {
+            env="$CONDA_DEFAULT_ENV"
+            conda deactivate
+            conda activate "$env"
+        }
+
+        conda_activate_existing ()
+        {
+            ENVS=($(conda env list | awk '{print $1}'))
+
+            for env in "$@"
+            do
+                if contains "$env" "${ENVS[@]}"; then
+                    echo "conda activate $env"
+                    conda activate "$env"
+                    return 0
+                fi
+            done
+
+            echo "Failed to activate any environment"
+            exit 1
+        }
+
+        conda_clean ()
+        {
+            for env in "$@"
+            do
+                if contains "$env" "${ENVS[@]}"; then
+                    conda env remove -n "$env"
+                    mamba create -n "$env" -y
+                else
+                    mamba create -n "$env" -y
+                fi
+            done
+        }
+
+        function get_simd()
+        {
+            if [[ "${SYS_TYPE}" == *E5v4* ]]; then
+                echo "_E5v4"
+            elif [[ "${SYS_TYPE}" == *s6g1* ]]; then
+                echo "_s6g1"
+            elif [[ "${SYS_TYPE}" == *S6g1* ]]; then
+                echo "_s6g1"
+            else
+                echo ""
+            fi
+        }
+        """
+    )]
+
+    ret += [f'conda_activate_existing "${condabase}$(get_simd)" "${condabase}"']
+    ret += []
+
+    return "\n".join(ret)
 
 
 def snippet_flush(cmd):
@@ -109,19 +149,17 @@ def script_exec(cmd, jobid=True, omp_num_threads=True, conda=True, flush=True):
         [snippet_echo_jobid, snippet_export_omp_num_threads, snippet_load_conda],
     ):
         if opt is True:
-            ret += [func()]
+            ret += [func(), ""]
         elif opt is not None and opt is not False:
             if type(opt) == dict:
-                ret += [func(**opt)]
+                ret += [func(**opt), ""]
             else:
-                ret += [func(*opt)]
-
-    ret += []
+                ret += [func(*opt), ""]
 
     if flush:
-        ret += [snippet_flush(cmd)]
+        ret += ["# --- Run ---", snippet_flush(cmd), ""]
     else:
-        ret += [cmd]
+        ret += ["# --- Run ---", cmd, ""]
 
     return "\n".join(ret)
 
