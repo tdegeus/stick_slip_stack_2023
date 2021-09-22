@@ -593,7 +593,9 @@ def cli_run(cli_args=None):
     run(args.file, dev=args.force)
 
 
-def runinc_event_basic(system: model.System, file: h5py.File, inc: int, Smax = sys.maxsize) -> dict:
+def runinc_event_basic(
+    system: model.System, file: h5py.File, inc: int, Smax=sys.maxsize
+) -> dict:
     """
     Rerun increment and get basic event information.
 
@@ -841,7 +843,9 @@ def cli_job_rerun_multislip(cli_args=None):
 
             for i in incs:
                 s = np.sum(S[i, :])
-                commands += [f"{executable} -i {i:d} -s {s:d} -o {simid}_inc={i:d}.h5 {relfile}"]
+                commands += [
+                    f"{executable} -i {i:d} -s {s:d} -o {simid}_inc={i:d}.h5 {relfile}"
+                ]
 
     slurm.serial_group(
         commands,
