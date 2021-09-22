@@ -593,13 +593,15 @@ def cli_run(cli_args=None):
     run(args.file, dev=args.force)
 
 
-def runinc_event_basic(system: model.System, file: h5py.File, inc: int) -> dict:
+def runinc_event_basic(system: model.System, file: h5py.File, inc: int, Smax = sys.maxsize) -> dict:
     """
     Rerun increment and get basic event information.
 
     :param system: The system (modified: all increments visited).
     :param file: Open simulation HDF5 archive (read-only).
     :param inc: The increment to return.
+    :param Smax: Optionally truncate the run at a given total S.
+
     :return: Dictionary:
         ``r`` : Position with columns (layer, block).
         ``t`` : Time of each row in ``r``.
@@ -616,6 +618,7 @@ def runinc_event_basic(system: model.System, file: h5py.File, inc: int) -> dict:
     system.setU(file[f"/disp/{inc - 1:d}"][...])
 
     idx_n = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, N)
+    idx_t = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, N)
 
     height = file["/drive/height"][...]
     dgamma = file["/drive/delta_gamma"][inc]
@@ -632,11 +635,14 @@ def runinc_event_basic(system: model.System, file: h5py.File, inc: int) -> dict:
         idx = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, N)
         t = system.t()
 
-        for r in np.argwhere(idx != idx_n):
+        for r in np.argwhere(idx != idx_t):
             R += [list(r)]
             T += [t]
 
-        idx_n = np.array(idx, copy=True)
+        idx_t = np.array(idx, copy=True)
+
+        if np.sum(idx - idx_n) >= Smax:
+            break
 
         if niter == 0:
             break
@@ -679,6 +685,13 @@ def cli_rerun_event(cli_args=None):
     )
 
     parser.add_argument(
+        "-s",
+        "--smax",
+        type=int,
+        help="Truncate at a given maximal total S",
+    )
+
+    parser.add_argument(
         "-o",
         "--output",
         type=str,
@@ -711,7 +724,10 @@ def cli_rerun_event(cli_args=None):
 
     with h5py.File(args.file, "r") as file:
         system = System.init(file)
-        ret = runinc_event_basic(system, file, args.inc)
+        if args.smax is None:
+            ret = runinc_event_basic(system, file, args.inc)
+        else:
+            ret = runinc_event_basic(system, file, args.inc, args.smax)
 
     with h5py.File(args.output, "w") as file:
         file["r"] = ret["r"]
@@ -739,6 +755,14 @@ def cli_job_rerun_multislip(cli_args=None):
     )
 
     parser.add_argument("info", type=str, help="EnsembleInfo (read-only)")
+
+    parser.add_argument(
+        "-m",
+        "--min",
+        type=float,
+        default=0.5,
+        help="Minimum fraction of blocks that slips on one of the layers to select the event",
+    )
 
     parser.add_argument(
         "-o",
@@ -799,9 +823,14 @@ def cli_job_rerun_multislip(cli_args=None):
 
     with h5py.File(args.info, "r") as file:
 
+        N = file["/normalisation/N"][...]
+
         for full in file["/files"].asstr()[...]:
             S = file[f"/full/{full}/S_layers"][...]
-            incs = np.argwhere(np.sum(S > 0, axis=1) > 1).ravel()
+            A = file[f"/full/{full}/A_layers"][...]
+            nany = np.sum(S > 0, axis=1)
+            nall = np.sum(A >= args.min * N, axis=1)
+            incs = np.argwhere((nany > 1) * (nall >= 1)).ravel()
 
             if len(incs) == 0:
                 continue
@@ -811,7 +840,8 @@ def cli_job_rerun_multislip(cli_args=None):
             relfile = os.path.relpath(filepath, args.outdir)
 
             for i in incs:
-                commands += [f"{executable} -i {i:d} -o {simid}_inc={i:d}.h5 {relfile}"]
+                s = np.sum(S[i, :])
+                commands += [f"{executable} -i {i:d} -s {s:d} -o {simid}_inc={i:d}.h5 {relfile}"]
 
     slurm.serial_group(
         commands,
