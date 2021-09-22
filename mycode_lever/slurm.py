@@ -31,7 +31,7 @@ def snippet_export_omp_num_threads(ncores=1):
     Return code to set OMP_NUM_THREADS
     :return: str
     """
-    return f'# Set number of cores to use\nexport OMP_NUM_THREADS={ncores}'
+    return f"# Set number of cores to use\nexport OMP_NUM_THREADS={ncores}"
 
 
 def snippet_load_conda(
@@ -46,67 +46,69 @@ def snippet_load_conda(
 
     ret = ["# --- Load Conda environment ---", ""]
     ret += [f"source {default_condaexec}"]
-    ret += [textwrap.dedent(
-        """
-        contains ()
-        {
-            local e match="$1"
-            shift
-            for e; do [[ "$e" == "$match" ]] && return 0; done
-            return 1
-        }
+    ret += [
+        textwrap.dedent(
+            """
+            contains ()
+            {
+                local e match="$1"
+                shift
+                for e; do [[ "$e" == "$match" ]] && return 0; done
+                return 1
+            }
 
-        conda_reactivate ()
-        {
-            env="$CONDA_DEFAULT_ENV"
-            conda deactivate
-            conda activate "$env"
-        }
+            conda_reactivate ()
+            {
+                env="$CONDA_DEFAULT_ENV"
+                conda deactivate
+                conda activate "$env"
+            }
 
-        conda_activate_existing ()
-        {
-            ENVS=($(conda env list | awk '{print $1}'))
+            conda_activate_existing ()
+            {
+                ENVS=($(conda env list | awk '{print $1}'))
 
-            for env in "$@"
-            do
-                if contains "$env" "${ENVS[@]}"; then
-                    echo "conda activate $env"
-                    conda activate "$env"
-                    return 0
-                fi
-            done
+                for env in "$@"
+                do
+                    if contains "$env" "${ENVS[@]}"; then
+                        echo "conda activate $env"
+                        conda activate "$env"
+                        return 0
+                    fi
+                done
 
-            echo "Failed to activate any environment"
-            exit 1
-        }
+                echo "Failed to activate any environment"
+                exit 1
+            }
 
-        conda_clean ()
-        {
-            for env in "$@"
-            do
-                if contains "$env" "${ENVS[@]}"; then
-                    conda env remove -n "$env"
-                    mamba create -n "$env" -y
+            conda_clean ()
+            {
+                for env in "$@"
+                do
+                    if contains "$env" "${ENVS[@]}"; then
+                        conda env remove -n "$env"
+                        mamba create -n "$env" -y
+                    else
+                        mamba create -n "$env" -y
+                    fi
+                done
+            }
+
+            function get_simd()
+            {
+                if [[ "${SYS_TYPE}" == *E5v4* ]]; then
+                    echo "_E5v4"
+                elif [[ "${SYS_TYPE}" == *s6g1* ]]; then
+                    echo "_s6g1"
+                elif [[ "${SYS_TYPE}" == *S6g1* ]]; then
+                    echo "_s6g1"
                 else
-                    mamba create -n "$env" -y
+                    echo ""
                 fi
-            done
-        }
-
-        function get_simd()
-        {
-            if [[ "${SYS_TYPE}" == *E5v4* ]]; then
-                echo "_E5v4"
-            elif [[ "${SYS_TYPE}" == *s6g1* ]]; then
-                echo "_s6g1"
-            elif [[ "${SYS_TYPE}" == *S6g1* ]]; then
-                echo "_s6g1"
-            else
-                echo ""
-            fi
-        }
-        """
-    )]
+            }
+            """
+        )
+    ]
 
     ret += [f'conda_activate_existing "${condabase}$(get_simd)" "${condabase}"']
     ret += []
