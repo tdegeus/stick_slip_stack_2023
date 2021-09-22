@@ -62,6 +62,7 @@ def snippet_load_conda(
                 env="$CONDA_DEFAULT_ENV"
                 conda deactivate
                 conda activate "$env"
+                echo "Reactivated: $CONDA_DEFAULT_ENV"
             }
 
             conda_activate_existing ()
@@ -83,14 +84,16 @@ def snippet_load_conda(
 
             conda_clean ()
             {
+                ENVS=($(conda env list | awk '{print $1}'))
+
                 for env in "$@"
                 do
                     if contains "$env" "${ENVS[@]}"; then
+                        echo "conda remove -n $env"
                         conda env remove -n "$env"
-                        mamba create -n "$env" -y
-                    else
-                        mamba create -n "$env" -y
                     fi
+                    echo "conda create -n $env"
+                    mamba create -n "$env" -y
                 done
             }
 
@@ -110,7 +113,7 @@ def snippet_load_conda(
         )
     ]
 
-    ret += [f'conda_activate_existing "${condabase}$(get_simd)" "${condabase}"']
+    ret += [f'conda_activate_existing "{condabase}$(get_simd)" "{condabase}"']
     ret += []
 
     return "\n".join(ret)
