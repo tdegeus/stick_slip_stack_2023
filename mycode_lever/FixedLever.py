@@ -734,6 +734,8 @@ def cli_rerun_event(cli_args=None):
     with h5py.File(args.output, "w") as file:
         file["r"] = ret["r"]
         file["t"] = ret["t"]
+        file["version"] = version
+        file["version_dependencies"] = model.version_dependencies()
 
 
 def cli_job_rerun_multislip(cli_args=None):
@@ -869,6 +871,7 @@ def basic_output(system: model.System, file: h5py.File, verbose: bool = True) ->
     ninc = incs.size
     assert np.all(incs == np.arange(ninc))
     nlayer = system.nlayer()
+    deps = file[f"/meta/Run{config}/version_dependencies"].asstr()[...]
 
     ret = dict(
         epsd=np.empty((ninc), dtype=float),
@@ -892,6 +895,8 @@ def basic_output(system: model.System, file: h5py.File, verbose: bool = True) ->
         dt=file["/run/dt"][...],
         kdrive=file["/drive/k"][...],
         seed=file["/meta/seed_base"][...],
+        version=file[f"/meta/Run{config}/version"].asstr()[...],
+        version_dependencies=deps,
     )
 
     kappa = ret["K"] / 3.0
@@ -1031,6 +1036,8 @@ def cli_ensembleinfo(cli_args=None):
         "A_layers",
         "inc",
         "steadystate",
+        "version",
+        "version_dependencies",
     ]
 
     if os.path.exists(args.output):
@@ -1070,6 +1077,8 @@ def cli_ensembleinfo(cli_args=None):
 
         output["files"] = files
         output["seeds"] = seeds
+        output["version"] = version
+        output["version_dependencies"] = model.version_dependencies()
 
 
 def view_paraview(
