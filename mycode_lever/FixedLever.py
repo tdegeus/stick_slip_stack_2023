@@ -22,14 +22,13 @@ from ._version import version
 config = "FixedLever"
 
 entry_points = dict(
-    cli_run = "FixedLever",
-    cli_ensembleinfo = "FixedLever_EnsembleInfo",
-    cli_rerun_event = "FixedLever_Events",
-    cli_job_rerun_multislip = "FixedLever_EventsJob",
+    cli_run="FixedLever",
+    cli_ensembleinfo="FixedLever_EnsembleInfo",
+    cli_rerun_event="FixedLever_Events",
+    cli_job_rerun_multislip="FixedLever_EventsJob",
 )
 
-
-entry_runinc_event_basic = "FixedLever_Events"
+file_defaults = dict(cli_ensembleinfo="EnsembleInfo.h5")
 
 
 def generate(
@@ -777,7 +776,7 @@ def cli_job_rerun_multislip(cli_args=None):
         "-e",
         "--executable",
         type=str,
-        default=entry_runinc_event_basic,
+        default=entry_points["cli_rerun_event"],
         help="Executable to use",
     )
 
@@ -939,7 +938,7 @@ def cli_ensembleinfo(cli_args=None):
         "-o",
         "--output",
         type=str,
-        default="EnsembleInfo.h5",
+        default=file_defaults["cli_ensembleinfo"],
         help="Output file",
     )
 
