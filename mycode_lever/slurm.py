@@ -166,23 +166,22 @@ def serial_group(
     if flush:
         commands = [snippet_flush(cmd) for cmd in commands]
 
-    ngroup = int(np.ceil(len(commands) / group))
-    fmt = str(int(np.ceil(np.log10(ngroup))))
+    chunks = int(np.ceil(len(commands) / float(group)))
+    devided = np.array_split(commands, chunks)
+    njob = len(devided)
+    fmt = str(int(np.ceil(np.log10(njob))))
 
-    for g in range(ngroup):
+    for g, selection in enumerate(devided):
 
-        ii = g * group
-        jj = (g + 1) * group
-        c = commands[ii:jj]
         command = script_exec(
-            "\n".join(c),
+            "\n".join(selection),
             jobid=jobid,
             omp_num_threads=omp_num_threads,
             conda=conda,
             flush=False,
         )
 
-        jobname = ("{0:s}_{1:0" + fmt + "d}-of-{2:d}").format(basename, g + 1, ngroup)
+        jobname = ("{0:s}_{1:0" + fmt + "d}-of-{2:d}").format(basename, g + 1, njob)
         sbatch["job-name"] = jobname
         sbatch["out"] = jobname + ".out"
 
