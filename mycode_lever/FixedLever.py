@@ -916,7 +916,7 @@ def basic_output(system: model.System, file: h5py.File, verbose: bool = True) ->
 def cli_ensembleinfo(cli_args=None):
     """
     Read information (avalanche size, stress, strain, ...) of an ensemble, and combine into
-    a single output file.
+    a single     output file.
     """
 
     if cli_args is None:
@@ -983,7 +983,11 @@ def cli_ensembleinfo(cli_args=None):
         "t0",
         "dt",
         "kdrive",
+        "nlayer",
+        "is_plastic",
+        "height",
     ]
+
     fields_full = [
         "epsd",
         "sigd",
@@ -993,9 +997,6 @@ def cli_ensembleinfo(cli_args=None):
         "A_layers",
         "inc",
         "steadystate",
-        "nlayer",
-        "is_plastic",
-        "height",
     ]
 
     if os.path.exists(args.output):
@@ -1020,7 +1021,8 @@ def cli_ensembleinfo(cli_args=None):
                 norm = {key: out[key] for key in fields_norm}
             else:
                 for key in fields_norm:
-                    assert np.isclose(norm[key], out[key])
+                    if not np.allclose(norm[key], out[key]):
+                        raise OSError(f"Inconsistent '{key}'")
 
             # write full output
             with h5py.File(args.output, "a") as output:
