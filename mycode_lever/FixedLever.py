@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 import textwrap
+import itertools
 
 import click
 import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
@@ -10,6 +11,7 @@ import GooseFEM
 import h5py
 import numpy as np
 import tqdm
+import prrng
 import XDMFWrite_h5py as xh
 
 from . import mesh
@@ -22,13 +24,43 @@ from ._version import version
 config = "FixedLever"
 
 entry_points = dict(
-    cli_run="FixedLever",
+    cli_run="FixedLever_Run",
+    cli_generate="FixedLever_Generate",
     cli_ensembleinfo="FixedLever_EnsembleInfo",
     cli_rerun_event="FixedLever_Events",
     cli_job_rerun_multislip="FixedLever_EventsJob",
 )
 
 file_defaults = dict(cli_ensembleinfo="EnsembleInfo.h5")
+
+
+def version_dependencies(system: model.System) -> list[str]:
+    """
+    Return list with version strings.
+    Compared to model.System.version_dependencies() this added the version of prrng.
+    """
+    return sorted(list(model.version_dependencies()) + ["prrng=" + prrng.version()])
+
+
+def interpret_filename(filename):
+    """
+    Split filename in useful information.
+    """
+
+    part = os.path.splitext(os.path.basename(filename))[0].split("_")
+    info = {}
+
+    for i in part:
+        key, value = i.split("=")
+        info[key] = value
+
+    for key in info:
+        if key in ["kplate"]:
+            info[key] = float(info[key])
+        else:
+            info[key] = int(info[key])
+
+    return info
 
 
 def generate(
@@ -166,7 +198,7 @@ def generate(
     # epsy = np.cumsum(epsy, axis=1)
 
     if delta_gamma is None:
-        delta_gamma = 0.005 * eps0 * np.ones(2000) / k_drive
+        delta_gamma = 0.001 * eps0 * np.ones(10000) / k_drive
         delta_gamma[0] = 0
 
     c = 1.0
@@ -178,6 +210,8 @@ def generate(
     alpha = np.sqrt(2.0) * qL * c * rho
 
     dt = (1.0 / (c * qh)) / 10.0
+
+    progname = entry_points["cli_generate"]
 
     with h5py.File(filename, "w") as file:
 
@@ -379,7 +413,7 @@ def generate(
 
         storage.dump_with_atttrs(
             file,
-            f"/meta/Run{config}/version",
+            f"/meta/{config}/{progname}/version",
             version,
             desc="Version when generating",
         )
@@ -415,7 +449,7 @@ def generate(
         storage.dump_with_atttrs(
             file,
             "/drive/symmetric",
-            symmetric,
+            bool(symmetric),
             desc="If false, the driving spring buckles under tension.",
         )
 
@@ -585,6 +619,7 @@ def run(filename: str, dev: bool):
     """
 
     basename = os.path.basename(filename)
+    progname = entry_points["cli_run"]
 
     with h5py.File(filename, "a") as file:
 
@@ -593,24 +628,23 @@ def run(filename: str, dev: bool):
         # check version compatibility
 
         assert dev or not tag.has_uncommited(version)
-        assert dev or not tag.any_has_uncommited(model.version_dependencies())
+        assert dev or not tag.any_has_uncommited(version_dependencies(model))
 
-        path = f"/meta/Run{config}/version"
-        if version != "None":
-            if path in file:
-                assert tag.greater_equal(version, str(file[path].asstr()[...]))
-            else:
-                file[path] = version
+        path = f"/meta/{config}/{progname}/version"
+        if path in file and version != "None":
+            assert tag.greater_equal(version, str(file[path].asstr()[...]))
+        else:
+            file[path] = version
 
-        path = f"/meta/Run{config}/version_dependencies"
+        path = f"/meta/{config}/{progname}/version_dependencies"
         if path in file:
             assert tag.all_greater_equal(
-                model.version_dependencies(), file[path].asstr()[...]
+                version_dependencies(model), file[path].asstr()[...]
             )
         else:
-            file[path] = model.version_dependencies()
+            file[path] = version_dependencies(model)
 
-        if f"/meta/Run{config}/completed" in file:
+        if f"/meta/{config}/{progname}/completed" in file:
             print("Marked completed, skipping")
             return 1
 
@@ -681,7 +715,7 @@ def run(filename: str, dev: bool):
 
             inc += 1
 
-        file["/meta/RunFixedLever/completed"] = 1
+        file[f"/meta/{config}/{progname}/completed"] = 1
 
 
 def cli_run(cli_args=None):
@@ -872,7 +906,7 @@ def cli_rerun_event(cli_args=None):
         file["r"] = ret["r"]
         file["t"] = ret["t"]
         file["version"] = version
-        file["version_dependencies"] = model.version_dependencies()
+        file["version_dependencies"] = version_dependencies(model)
 
 
 def cli_job_rerun_multislip(cli_args=None):
@@ -1008,7 +1042,8 @@ def basic_output(system: model.System, file: h5py.File, verbose: bool = True) ->
     ninc = incs.size
     assert np.all(incs == np.arange(ninc))
     nlayer = system.nlayer()
-    deps = file[f"/meta/Run{config}/version_dependencies"].asstr()[...]
+    progname = entry_points["cli_run"]
+    deps = file[f"/meta/{config}/{progname}/version_dependencies"].asstr()[...]
 
     ret = dict(
         epsd=np.empty((ninc), dtype=float),
@@ -1032,7 +1067,7 @@ def basic_output(system: model.System, file: h5py.File, verbose: bool = True) ->
         dt=file["/run/dt"][...],
         kdrive=file["/drive/k"][...],
         seed=file["/meta/seed_base"][...],
-        version=file[f"/meta/Run{config}/version"].asstr()[...],
+        version=file[f"/meta/{config}/{progname}/version"].asstr()[...],
         version_dependencies=deps,
     )
 
@@ -1092,7 +1127,7 @@ def basic_output(system: model.System, file: h5py.File, verbose: bool = True) ->
 def cli_ensembleinfo(cli_args=None):
     """
     Read information (avalanche size, stress, strain, ...) of an ensemble, and combine into
-    a single     output file.
+    a single output file.
     """
 
     if cli_args is None:
@@ -1171,8 +1206,13 @@ def cli_ensembleinfo(cli_args=None):
         "sigd_layers",
         "S_layers",
         "A_layers",
+        "drive_ux",
+        "drive_fx",
+        "layers_ux",
+        "layers_tx",
         "inc",
         "steadystate",
+        "delta_gamma", # todo: could be moved to normalisation
         "version",
         "version_dependencies",
     ]
@@ -1215,7 +1255,7 @@ def cli_ensembleinfo(cli_args=None):
         output["files"] = files
         output["seeds"] = seeds
         output["version"] = version
-        output["version_dependencies"] = model.version_dependencies()
+        output["version_dependencies"] = version_dependencies(model)
 
 
 def view_paraview(
