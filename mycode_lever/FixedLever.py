@@ -411,12 +411,8 @@ def generate(
             desc="Basic seed == 'unique' identifier",
         )
 
-        storage.dump_with_atttrs(
-            file,
-            f"/meta/{config}/{progname}/version",
-            version,
-            desc="Version when generating",
-        )
+        meta = file.create_group(f"/meta/{config}/{progname}")
+        meta.attrs["version"] = version
 
         elemmap = stitch.elemmap()
         nodemap = stitch.nodemap()
@@ -635,23 +631,19 @@ def run(filename: str, dev: bool):
         assert dev or not tag.has_uncommited(version)
         assert dev or not tag.any_has_uncommited(version_dependencies(model))
 
-        path = f"/meta/{config}/{progname}/version"
-        if path in file and version != "None":
-            assert tag.greater_equal(version, str(file[path].asstr()[...]))
+        if f"/meta/{config}/{progname}" not in file:
+            meta = file.create_group(f"/meta/{config}/{progname}")
+            meta.attrs["version"] = version
+            meta.attrs["version_dependencies"] = version_dependencies(model)
         else:
-            file[path] = version
+            meta = file[f"/meta/{config}/{progname}"]
 
-        path = f"/meta/{config}/{progname}/version_dependencies"
-        if path in file:
-            assert tag.all_greater_equal(
-                version_dependencies(model), file[path].asstr()[...]
-            )
-        else:
-            file[path] = version_dependencies(model)
-
-        if f"/meta/{config}/{progname}/completed" in file:
+        if "completed" in meta:
             print("Marked completed, skipping")
             return 1
+
+        assert tag.greater_equal(version, meta.attrs["version"])
+        assert tag.all_greater_equal(version_dependencies(model), meta.attrs["version_dependencies"])
 
         # restore or initialise the system / output
 
@@ -720,7 +712,7 @@ def run(filename: str, dev: bool):
 
             inc += 1
 
-        file[f"/meta/{config}/{progname}/completed"] = 1
+        meta.attrs["completed"] = 1
 
 
 def cli_run(cli_args=None):
@@ -892,6 +884,7 @@ def cli_rerun_event(cli_args=None):
     )
 
     args = parser.parse_args(cli_args)
+    progname = entry_points["cli_rerun_event"]
 
     assert os.path.isfile(os.path.realpath(args.file))
 
@@ -910,8 +903,9 @@ def cli_rerun_event(cli_args=None):
     with h5py.File(args.output, "w") as file:
         file["r"] = ret["r"]
         file["t"] = ret["t"]
-        file["version"] = version
-        file["version_dependencies"] = version_dependencies(model)
+        meta = file.create_group(f"/meta/{config}/{progname}")
+        meta.attrs["version"] = version
+        meta.attrs["version_dependencies"] = version_dependencies(model)
 
 
 def cli_job_rerun_multislip(cli_args=None):
@@ -1005,7 +999,7 @@ def cli_job_rerun_multislip(cli_args=None):
 
         N = file["/normalisation/N"][...]
 
-        for full in file["/files"].asstr()[...]:
+        for full in file["/full"].attrs["stored"]:
             S = file[f"/full/{full}/S_layers"][...]
             A = file[f"/full/{full}/A_layers"][...]
             nany = np.sum(S > 0, axis=1)
@@ -1048,7 +1042,6 @@ def basic_output(system: model.System, file: h5py.File, verbose: bool = True) ->
     assert np.all(incs == np.arange(ninc))
     nlayer = system.nlayer()
     progname = entry_points["cli_run"]
-    deps = file[f"/meta/{config}/{progname}/version_dependencies"].asstr()[...]
 
     ret = dict(
         epsd=np.empty((ninc), dtype=float),
@@ -1072,8 +1065,8 @@ def basic_output(system: model.System, file: h5py.File, verbose: bool = True) ->
         dt=file["/run/dt"][...],
         kdrive=file["/drive/k"][...],
         seed=file["/meta/seed_base"][...],
-        version=file[f"/meta/{config}/{progname}/version"].asstr()[...],
-        version_dependencies=deps,
+        version=file[f"/meta/{config}/{progname}"].attrs["version"],
+        version_dependencies=file[f"/meta/{config}/{progname}"].attrs["version_dependencies"],
     )
 
     kappa = ret["K"] / 3.0
@@ -1175,6 +1168,7 @@ def cli_ensembleinfo(cli_args=None):
     parser.add_argument("files", nargs="*", type=str, help="Files to read")
 
     args = parser.parse_args(cli_args)
+    progname = entry_points["cli_ensembleinfo"]
 
     assert len(args.files) > 0
     assert np.all([os.path.isfile(os.path.realpath(file)) for file in args.files])
@@ -1257,10 +1251,11 @@ def cli_ensembleinfo(cli_args=None):
         for key, value in norm.items():
             output[f"/normalisation/{key}"] = value
 
-        output["files"] = files
-        output["seeds"] = seeds
-        output["version"] = version
-        output["version_dependencies"] = version_dependencies(model)
+        output["full"].attrs["stored"] = files
+        output["full"].attrs["seeds"] = seeds
+        meta = output.create_group(f"/meta/{config}/{progname}")
+        meta.attrs["version"] = version
+        meta.attrs["version_dependencies"] = version_dependencies(model)
 
 
 def view_paraview(
