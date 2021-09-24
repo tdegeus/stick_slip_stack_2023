@@ -4,6 +4,7 @@ import numpy as np
 import prrng
 from numpy.typing import ArrayLike
 
+
 def get_epsy(initstate, initseq, eps_offset, eps0, k, nchunk):
     """
     Get yield strain sequence.
@@ -35,12 +36,12 @@ def read_epsy(file: h5py.File) -> np.ndarray:
     """
 
     return get_epsy(
-        initstate = file["/cusp/epsy/initstate"][...],
-        initseq = file["/cusp/epsy/initseq"][...],
-        eps_offset = file["/cusp/epsy/eps_offset"][...],
-        eps0 = file["/cusp/epsy/eps0"][...],
-        k = file["/cusp/epsy/k"][...],
-        nchunk = file["/cusp/epsy/nchunk"][...],
+        initstate=file["/cusp/epsy/initstate"][...],
+        initseq=file["/cusp/epsy/initseq"][...],
+        eps_offset=file["/cusp/epsy/eps_offset"][...],
+        eps0=file["/cusp/epsy/eps0"][...],
+        k=file["/cusp/epsy/k"][...],
+        nchunk=file["/cusp/epsy/nchunk"][...],
     )
 
 

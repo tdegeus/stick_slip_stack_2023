@@ -1,8 +1,8 @@
 import argparse
+import itertools
 import os
 import sys
 import textwrap
-import itertools
 
 import click
 import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
@@ -10,8 +10,8 @@ import GMatElastoPlasticQPot.Cartesian2d as GMat
 import GooseFEM
 import h5py
 import numpy as np
-import tqdm
 import prrng
+import tqdm
 import XDMFWrite_h5py as xh
 
 from . import mesh
@@ -521,28 +521,29 @@ def cli_generate(cli_args=None):
         "--max-plates",
         type=int,
         default=100,
-        help="Maximum number of plates, help to set the seeds."
+        help="Maximum number of plates, help to set the seeds.",
     )
 
     parser.add_argument(
         "-k",
         type=float,
         default=1e-3,
-        help="Drive string stiffness"
+        help="Stiffness of the drive spring (typically low)",
     )
 
     parser.add_argument(
         "--symmetric",
         type=int,
         default=1,
-        help="Drive string symmetric"
+        help="Set the symmetry of the drive spring (True/False)",
     )
 
     parser.add_argument(
         "--seed",
         type=int,
         default=0,
-        help="Base of all seeds of all realisations")
+        help="Base of all seeds of all realisations (should normally not be changed)",
+    )
 
     parser.add_argument(
         "-n",
@@ -581,22 +582,26 @@ def cli_generate(cli_args=None):
 
     files = []
 
-    for i, nplates in itertools.product(range(args.start, args.start + args.nsim), range(2, args.nlayer + 1)):
-        filename = "_".join([
-            f"id={i:03d}",
-            f"nplates={nplates:d}",
-            f"kplate={args.k:.0e}",
-            f"symmetric={args.symmetric:d}.h5",
-            ])
+    for i, nplates in itertools.product(
+        range(args.start, args.start + args.nsim), range(2, args.nlayer + 1)
+    ):
+        filename = "_".join(
+            [
+                f"id={i:03d}",
+                f"nplates={nplates:d}",
+                f"kplate={args.k:.0e}",
+                f"symmetric={args.symmetric:d}.h5",
+            ]
+        )
         files += [filename]
 
         generate(
-            filename = os.path.join(args.outdir, filename),
-            N = args.size,
-            nplates = nplates,
-            seed = args.seed + i * args.size * (args.max_plates - 1),
-            k_drive = args.k,
-            symmetric = args.symmetric,
+            filename=os.path.join(args.outdir, filename),
+            N=args.size,
+            nplates=nplates,
+            seed=args.seed + i * args.size * (args.max_plates - 1),
+            k_drive=args.k,
+            symmetric=args.symmetric,
         )
 
     progname = entry_points["cli_run"]
@@ -1212,7 +1217,7 @@ def cli_ensembleinfo(cli_args=None):
         "layers_tx",
         "inc",
         "steadystate",
-        "delta_gamma", # todo: could be moved to normalisation
+        "delta_gamma",  # todo: could be moved to normalisation
         "version",
         "version_dependencies",
     ]

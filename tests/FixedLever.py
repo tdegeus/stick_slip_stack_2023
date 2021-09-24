@@ -2,6 +2,7 @@ import os
 import shutil
 import sys
 import unittest
+
 import GooseHDF5 as g5
 import h5py
 
@@ -11,7 +12,6 @@ import mycode_lever as my  # noqa: E402
 
 
 class MyTests(unittest.TestCase):
-
     def test_generate(self):
 
         dirname = "mytest"
