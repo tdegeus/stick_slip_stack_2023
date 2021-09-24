@@ -441,6 +441,141 @@ def generate(
         )
 
 
+def cli_generate(cli_args=None):
+    """
+    Generate IO files, including job-scripts to run simulations.
+    """
+
+    if cli_args is None:
+        cli_args = sys.argv[1:]
+    else:
+        cli_args = [str(arg) for arg in cli_args]
+
+    class MyFormatter(
+        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
+    ):
+        pass
+
+    parser = argparse.ArgumentParser(
+        formatter_class=MyFormatter,
+        description=textwrap.dedent(cli_generate.__doc__),
+    )
+
+    parser.add_argument(
+        "outdir",
+        type=str,
+        help="Output directory",
+    )
+
+    parser.add_argument(
+        "-N",
+        "--size",
+        type=int,
+        default=2 * (3 ** 6),
+        help="Number of plastic blocks, per weak layer",
+    )
+
+    parser.add_argument(
+        "-l",
+        "--nlayer",
+        type=int,
+        default=6,
+        help="Maximum number of layers (generated: 2, 3, ..., nlayer)",
+    )
+
+    parser.add_argument(
+        "--max-plates",
+        type=int,
+        default=100,
+        help="Maximum number of plates, help to set the seeds."
+    )
+
+    parser.add_argument(
+        "-k",
+        type=float,
+        default=1e-3,
+        help="Drive string stiffness"
+    )
+
+    parser.add_argument(
+        "--symmetric",
+        type=int,
+        default=1,
+        help="Drive string symmetric"
+    )
+
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="Base of all seeds of all realisations")
+
+    parser.add_argument(
+        "-n",
+        "--nsim",
+        type=int,
+        default=1,
+        help="Number of simulations to generate",
+    )
+
+    parser.add_argument(
+        "-s",
+        "--start",
+        type=int,
+        default=0,
+        help="Starting simulation (sets the seed)",
+    )
+
+    parser.add_argument(
+        "-w",
+        "--time",
+        type=str,
+        default="72h",
+        help="Walltime to allocate for the job",
+    )
+
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=version,
+    )
+
+    args = parser.parse_args(cli_args)
+
+    assert os.path.isdir(os.path.realpath(args.outdir))
+
+    files = []
+
+    for i, nplates in itertools.product(range(args.start, args.start + args.nsim), range(2, args.nlayer + 1)):
+        filename = "_".join([
+            f"id={i:03d}",
+            f"nplates={nplates:d}",
+            f"kplate={args.k:.0e}",
+            f"symmetric={args.symmetric:d}.h5",
+            ])
+        files += [filename]
+
+        generate(
+            filename = os.path.join(args.outdir, filename),
+            N = args.size,
+            nplates = nplates,
+            seed = args.seed + i * args.size * (args.max_plates - 1),
+            k_drive = args.k,
+            symmetric = args.symmetric,
+        )
+
+    progname = entry_points["cli_run"]
+    commands = [f"{progname} {file}" for file in files]
+    slurm.serial_group(
+        commands,
+        basename=progname,
+        group=1,
+        outdir=args.outdir,
+        sbatch={"time": args.time},
+    )
+
+
 def run(filename: str, dev: bool):
     """
     Run the simulation.
