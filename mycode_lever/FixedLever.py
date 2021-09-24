@@ -670,6 +670,8 @@ def run(filename: str, dev: bool):
 
             system.layerTagetUbar_addAffineSimpleShear(dgamma, height)
             niter = system.minimise()
+            if not system.boundcheck_right(5):
+                break
             print(f'"{basename}": inc = {inc:8d}, niter = {niter:8d}')
 
             storage.dset_extend1d(file, "/stored", inc, inc)
