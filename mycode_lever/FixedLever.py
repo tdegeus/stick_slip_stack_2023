@@ -34,7 +34,7 @@ entry_points = dict(
 file_defaults = dict(cli_ensembleinfo="EnsembleInfo.h5")
 
 
-def version_dependencies(system: model.System) -> list[str]:
+def dependencies(system: model.System) -> list[str]:
     """
     Return list with version strings.
     Compared to model.System.version_dependencies() this added the version of prrng.
@@ -629,12 +629,12 @@ def run(filename: str, dev: bool):
         # check version compatibility
 
         assert dev or not tag.has_uncommited(version)
-        assert dev or not tag.any_has_uncommited(version_dependencies(model))
+        assert dev or not tag.any_has_uncommited(dependencies(model))
 
         if f"/meta/{config}/{progname}" not in file:
             meta = file.create_group(f"/meta/{config}/{progname}")
             meta.attrs["version"] = version
-            meta.attrs["version_dependencies"] = version_dependencies(model)
+            meta.attrs["dependencies"] = dependencies(model)
         else:
             meta = file[f"/meta/{config}/{progname}"]
 
@@ -643,7 +643,7 @@ def run(filename: str, dev: bool):
             return 1
 
         assert tag.greater_equal(version, meta.attrs["version"])
-        assert tag.all_greater_equal(version_dependencies(model), meta.attrs["version_dependencies"])
+        assert tag.all_greater_equal(dependencies(model), meta.attrs["dependencies"])
 
         # restore or initialise the system / output
 
@@ -905,7 +905,7 @@ def cli_rerun_event(cli_args=None):
         file["t"] = ret["t"]
         meta = file.create_group(f"/meta/{config}/{progname}")
         meta.attrs["version"] = version
-        meta.attrs["version_dependencies"] = version_dependencies(model)
+        meta.attrs["dependencies"] = dependencies(model)
 
 
 def cli_job_rerun_multislip(cli_args=None):
@@ -1066,7 +1066,7 @@ def basic_output(system: model.System, file: h5py.File, verbose: bool = True) ->
         kdrive=file["/drive/k"][...],
         seed=file["/meta/seed_base"][...],
         version=file[f"/meta/{config}/{progname}"].attrs["version"],
-        version_dependencies=file[f"/meta/{config}/{progname}"].attrs["version_dependencies"],
+        dependencies=file[f"/meta/{config}/{progname}"].attrs["dependencies"],
     )
 
     kappa = ret["K"] / 3.0
@@ -1213,7 +1213,7 @@ def cli_ensembleinfo(cli_args=None):
         "steadystate",
         "delta_gamma",  # todo: could be moved to normalisation
         "version",
-        "version_dependencies",
+        "dependencies",
     ]
 
     if os.path.exists(args.output):
@@ -1255,7 +1255,7 @@ def cli_ensembleinfo(cli_args=None):
         output["full"].attrs["seeds"] = seeds
         meta = output.create_group(f"/meta/{config}/{progname}")
         meta.attrs["version"] = version
-        meta.attrs["version_dependencies"] = version_dependencies(model)
+        meta.attrs["dependencies"] = dependencies(model)
 
 
 def view_paraview(
