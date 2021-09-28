@@ -5,20 +5,17 @@ import prrng
 from numpy.typing import ArrayLike
 
 
-def read_epsy(file: h5py.File) -> np.ndarray:
+def get_epsy(initstate, initseq, eps_offset, eps0, k, nchunk):
     """
-    Regenerate yield strain sequence per plastic element.
-    The output shape is given by the stored ``initstate``.
+    Get yield strain sequence.
 
-    :param file: Opened simulation archive.
+    :param initstate: State of the random number generator.
+    :param initseq: State of the random number generator.
+    :param eps_offset: Offset to apply to each drawn random number.
+    :param eps0: Typical yield strain: the distance between two cusps is twice this.
+    :param k: Shape parameter of the Weibull distribution.
+    :param nchunk: Chunk size.
     """
-
-    initstate = file["/cusp/epsy/initstate"][...]
-    initseq = file["/cusp/epsy/initseq"][...]
-    eps_offset = file["/cusp/epsy/eps_offset"][...]
-    eps0 = file["/cusp/epsy/eps0"][...]
-    k = file["/cusp/epsy/k"][...]
-    nchunk = file["/cusp/epsy/nchunk"][...]
 
     generators = prrng.pcg32_array(initstate, initseq)
 
@@ -28,6 +25,24 @@ def read_epsy(file: h5py.File) -> np.ndarray:
     epsy = np.cumsum(epsy, 1)
 
     return epsy
+
+
+def read_epsy(file: h5py.File) -> np.ndarray:
+    """
+    Regenerate yield strain sequence per plastic element.
+    The output shape is given by the stored ``initstate``.
+
+    :param file: Opened simulation archive.
+    """
+
+    return get_epsy(
+        initstate=file["/cusp/epsy/initstate"][...],
+        initseq=file["/cusp/epsy/initseq"][...],
+        eps_offset=file["/cusp/epsy/eps_offset"][...],
+        eps0=file["/cusp/epsy/eps0"][...],
+        k=file["/cusp/epsy/k"][...],
+        nchunk=file["/cusp/epsy/nchunk"][...],
+    )
 
 
 def init(file: h5py.File) -> model.System:

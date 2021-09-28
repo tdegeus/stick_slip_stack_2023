@@ -1,4 +1,5 @@
 import argparse
+import itertools
 import os
 import sys
 import textwrap
@@ -9,6 +10,7 @@ import GMatElastoPlasticQPot.Cartesian2d as GMat
 import GooseFEM
 import h5py
 import numpy as np
+import prrng
 import tqdm
 import XDMFWrite_h5py as xh
 
@@ -22,13 +24,43 @@ from ._version import version
 config = "FixedLever"
 
 entry_points = dict(
-    cli_run="FixedLever",
+    cli_run="FixedLever_Run",
+    cli_generate="FixedLever_Generate",
     cli_ensembleinfo="FixedLever_EnsembleInfo",
     cli_rerun_event="FixedLever_Events",
     cli_job_rerun_multislip="FixedLever_EventsJob",
 )
 
 file_defaults = dict(cli_ensembleinfo="EnsembleInfo.h5")
+
+
+def dependencies(system: model.System) -> list[str]:
+    """
+    Return list with version strings.
+    Compared to model.System.version_dependencies() this added the version of prrng.
+    """
+    return sorted(list(model.version_dependencies()) + ["prrng=" + prrng.version()])
+
+
+def interpret_filename(filename):
+    """
+    Split filename in useful information.
+    """
+
+    part = os.path.splitext(os.path.basename(filename))[0].split("_")
+    info = {}
+
+    for i in part:
+        key, value = i.split("=")
+        info[key] = value
+
+    for key in info:
+        if key in ["kplate"]:
+            info[key] = float(info[key])
+        else:
+            info[key] = int(info[key])
+
+    return info
 
 
 def generate(
@@ -166,7 +198,7 @@ def generate(
     # epsy = np.cumsum(epsy, axis=1)
 
     if delta_gamma is None:
-        delta_gamma = 0.005 * eps0 * np.ones(2000) / k_drive
+        delta_gamma = 0.001 * eps0 * np.ones(10000) / k_drive
         delta_gamma[0] = 0
 
     c = 1.0
@@ -178,6 +210,8 @@ def generate(
     alpha = np.sqrt(2.0) * qL * c * rho
 
     dt = (1.0 / (c * qh)) / 10.0
+
+    progname = entry_points["cli_generate"]
 
     with h5py.File(filename, "w") as file:
 
@@ -377,12 +411,8 @@ def generate(
             desc="Basic seed == 'unique' identifier",
         )
 
-        storage.dump_with_atttrs(
-            file,
-            f"/meta/Run{config}/version",
-            version,
-            desc="Version when generating",
-        )
+        meta = file.create_group(f"/meta/{config}/{progname}")
+        meta.attrs["version"] = version
 
         elemmap = stitch.elemmap()
         nodemap = stitch.nodemap()
@@ -415,7 +445,7 @@ def generate(
         storage.dump_with_atttrs(
             file,
             "/drive/symmetric",
-            symmetric,
+            bool(symmetric),
             desc="If false, the driving spring buckles under tension.",
         )
 
@@ -441,6 +471,146 @@ def generate(
         )
 
 
+def cli_generate(cli_args=None):
+    """
+    Generate IO files, including job-scripts to run simulations.
+    """
+
+    if cli_args is None:
+        cli_args = sys.argv[1:]
+    else:
+        cli_args = [str(arg) for arg in cli_args]
+
+    class MyFormatter(
+        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
+    ):
+        pass
+
+    parser = argparse.ArgumentParser(
+        formatter_class=MyFormatter,
+        description=textwrap.dedent(cli_generate.__doc__),
+    )
+
+    parser.add_argument(
+        "outdir",
+        type=str,
+        help="Output directory",
+    )
+
+    parser.add_argument(
+        "-N",
+        "--size",
+        type=int,
+        default=2 * (3 ** 6),
+        help="Number of plastic blocks, per weak layer",
+    )
+
+    parser.add_argument(
+        "-l",
+        "--nlayer",
+        type=int,
+        default=6,
+        help="Maximum number of layers (generated: 2, 3, ..., nlayer)",
+    )
+
+    parser.add_argument(
+        "--max-plates",
+        type=int,
+        default=100,
+        help="Maximum number of plates, help to set the seeds.",
+    )
+
+    parser.add_argument(
+        "-k",
+        type=float,
+        default=1e-3,
+        help="Stiffness of the drive spring (typically low)",
+    )
+
+    parser.add_argument(
+        "--symmetric",
+        type=int,
+        default=1,
+        help="Set the symmetry of the drive spring (True/False)",
+    )
+
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="Base of all seeds of all realisations (should normally not be changed)",
+    )
+
+    parser.add_argument(
+        "-n",
+        "--nsim",
+        type=int,
+        default=1,
+        help="Number of simulations to generate",
+    )
+
+    parser.add_argument(
+        "-s",
+        "--start",
+        type=int,
+        default=0,
+        help="Starting simulation (sets the seed)",
+    )
+
+    parser.add_argument(
+        "-w",
+        "--time",
+        type=str,
+        default="72h",
+        help="Walltime to allocate for the job",
+    )
+
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=version,
+    )
+
+    args = parser.parse_args(cli_args)
+
+    assert os.path.isdir(os.path.realpath(args.outdir))
+
+    files = []
+
+    for i, nplates in itertools.product(
+        range(args.start, args.start + args.nsim), range(2, args.nlayer + 1)
+    ):
+        filename = "_".join(
+            [
+                f"id={i:03d}",
+                f"nplates={nplates:d}",
+                f"kplate={args.k:.0e}",
+                f"symmetric={args.symmetric:d}.h5",
+            ]
+        )
+        files += [filename]
+
+        generate(
+            filename=os.path.join(args.outdir, filename),
+            N=args.size,
+            nplates=nplates,
+            seed=args.seed + i * args.size * (args.max_plates - 1),
+            k_drive=args.k,
+            symmetric=args.symmetric,
+        )
+
+    progname = entry_points["cli_run"]
+    commands = [f"{progname} {file}" for file in files]
+    slurm.serial_group(
+        commands,
+        basename=progname,
+        group=1,
+        outdir=args.outdir,
+        sbatch={"time": args.time},
+    )
+
+
 def run(filename: str, dev: bool):
     """
     Run the simulation.
@@ -450,6 +620,7 @@ def run(filename: str, dev: bool):
     """
 
     basename = os.path.basename(filename)
+    progname = entry_points["cli_run"]
 
     with h5py.File(filename, "a") as file:
 
@@ -458,26 +629,21 @@ def run(filename: str, dev: bool):
         # check version compatibility
 
         assert dev or not tag.has_uncommited(version)
-        assert dev or not tag.any_has_uncommited(model.version_dependencies())
+        assert dev or not tag.any_has_uncommited(dependencies(model))
 
-        path = f"/meta/Run{config}/version"
-        if version != "None":
-            if path in file:
-                assert tag.greater_equal(version, str(file[path].asstr()[...]))
-            else:
-                file[path] = version
-
-        path = f"/meta/Run{config}/version_dependencies"
-        if path in file:
-            assert tag.all_greater_equal(
-                model.version_dependencies(), file[path].asstr()[...]
-            )
+        if f"/meta/{config}/{progname}" not in file:
+            meta = file.create_group(f"/meta/{config}/{progname}")
+            meta.attrs["version"] = version
+            meta.attrs["dependencies"] = dependencies(model)
         else:
-            file[path] = model.version_dependencies()
+            meta = file[f"/meta/{config}/{progname}"]
 
-        if f"/meta/Run{config}/completed" in file:
+        if "completed" in meta:
             print("Marked completed, skipping")
             return 1
+
+        assert tag.greater_equal(version, meta.attrs["version"])
+        assert tag.all_greater_equal(dependencies(model), meta.attrs["dependencies"])
 
         # restore or initialise the system / output
 
@@ -535,6 +701,8 @@ def run(filename: str, dev: bool):
 
             system.layerTagetUbar_addAffineSimpleShear(dgamma, height)
             niter = system.minimise()
+            if not system.boundcheck_right(5):
+                break
             print(f'"{basename}": inc = {inc:8d}, niter = {niter:8d}')
 
             storage.dset_extend1d(file, "/stored", inc, inc)
@@ -544,7 +712,7 @@ def run(filename: str, dev: bool):
 
             inc += 1
 
-        file["/meta/RunFixedLever/completed"] = 1
+        meta.attrs["completed"] = 1
 
 
 def cli_run(cli_args=None):
@@ -716,6 +884,7 @@ def cli_rerun_event(cli_args=None):
     )
 
     args = parser.parse_args(cli_args)
+    progname = entry_points["cli_rerun_event"]
 
     assert os.path.isfile(os.path.realpath(args.file))
 
@@ -734,8 +903,9 @@ def cli_rerun_event(cli_args=None):
     with h5py.File(args.output, "w") as file:
         file["r"] = ret["r"]
         file["t"] = ret["t"]
-        file["version"] = version
-        file["version_dependencies"] = model.version_dependencies()
+        meta = file.create_group(f"/meta/{config}/{progname}")
+        meta.attrs["version"] = version
+        meta.attrs["dependencies"] = dependencies(model)
 
 
 def cli_job_rerun_multislip(cli_args=None):
@@ -829,7 +999,7 @@ def cli_job_rerun_multislip(cli_args=None):
 
         N = file["/normalisation/N"][...]
 
-        for full in file["/files"].asstr()[...]:
+        for full in file["/full"].attrs["stored"]:
             S = file[f"/full/{full}/S_layers"][...]
             A = file[f"/full/{full}/A_layers"][...]
             nany = np.sum(S > 0, axis=1)
@@ -871,7 +1041,7 @@ def basic_output(system: model.System, file: h5py.File, verbose: bool = True) ->
     ninc = incs.size
     assert np.all(incs == np.arange(ninc))
     nlayer = system.nlayer()
-    deps = file[f"/meta/Run{config}/version_dependencies"].asstr()[...]
+    progname = entry_points["cli_run"]
 
     ret = dict(
         epsd=np.empty((ninc), dtype=float),
@@ -895,8 +1065,8 @@ def basic_output(system: model.System, file: h5py.File, verbose: bool = True) ->
         dt=file["/run/dt"][...],
         kdrive=file["/drive/k"][...],
         seed=file["/meta/seed_base"][...],
-        version=file[f"/meta/Run{config}/version"].asstr()[...],
-        version_dependencies=deps,
+        version=file[f"/meta/{config}/{progname}"].attrs["version"],
+        dependencies=file[f"/meta/{config}/{progname}"].attrs["dependencies"],
     )
 
     kappa = ret["K"] / 3.0
@@ -955,7 +1125,7 @@ def basic_output(system: model.System, file: h5py.File, verbose: bool = True) ->
 def cli_ensembleinfo(cli_args=None):
     """
     Read information (avalanche size, stress, strain, ...) of an ensemble, and combine into
-    a single     output file.
+    a single output file.
     """
 
     if cli_args is None:
@@ -998,6 +1168,7 @@ def cli_ensembleinfo(cli_args=None):
     parser.add_argument("files", nargs="*", type=str, help="Files to read")
 
     args = parser.parse_args(cli_args)
+    progname = entry_points["cli_ensembleinfo"]
 
     assert len(args.files) > 0
     assert np.all([os.path.isfile(os.path.realpath(file)) for file in args.files])
@@ -1034,10 +1205,15 @@ def cli_ensembleinfo(cli_args=None):
         "sigd_layers",
         "S_layers",
         "A_layers",
+        "drive_ux",
+        "drive_fx",
+        "layers_ux",
+        "layers_tx",
         "inc",
         "steadystate",
+        "delta_gamma",  # todo: could be moved to normalisation
         "version",
-        "version_dependencies",
+        "dependencies",
     ]
 
     if os.path.exists(args.output):
@@ -1075,10 +1251,11 @@ def cli_ensembleinfo(cli_args=None):
         for key, value in norm.items():
             output[f"/normalisation/{key}"] = value
 
-        output["files"] = files
-        output["seeds"] = seeds
-        output["version"] = version
-        output["version_dependencies"] = model.version_dependencies()
+        output["full"].attrs["stored"] = files
+        output["full"].attrs["seeds"] = seeds
+        meta = output.create_group(f"/meta/{config}/{progname}")
+        meta.attrs["version"] = version
+        meta.attrs["dependencies"] = dependencies(model)
 
 
 def view_paraview(
