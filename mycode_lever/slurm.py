@@ -1,4 +1,5 @@
 import argparse
+import inspect
 import os
 import sys
 import textwrap
@@ -6,15 +7,36 @@ import textwrap
 import GooseSLURM
 import numpy as np
 
+from ._version import version
+
 default_condabase = "code_layers"
 
 entry_points = dict(
     cli_serial_group="JobSerialGroup",
+    cli_serial="JobSerial",
 )
 
 slurm_defaults = dict(
     account="flexlab-frictionlayers",
 )
+
+
+def replace_entry_point(docstring):
+    """
+    Replace ":py:func:`...`" with the relevant entry_point name
+    """
+    for ep in entry_points:
+        docstring = docstring.replace(fr":py:func:`{ep:s}`", entry_points[ep])
+    return docstring
+
+
+def snippet_initenv(cmd="source $HOME/myinit/compiler_conda.sh"):
+    """
+    Return code to initialise the environment.
+    :param cmd: The command to run.
+    :return: str
+    """
+    return f"# Initialise the environment\n{cmd}"
 
 
 def snippet_export_omp_num_threads(ncores=1):
@@ -28,110 +50,19 @@ def snippet_export_omp_num_threads(ncores=1):
 def snippet_load_conda(condabase: str = default_condabase):
     """
     Return code to load the Conda environment.
+    This function assumes that these BASH-functions are present:
+    -   ``conda_activate_first_existing``
+    -   ``get_simd_envname``
+    Use snippet_initenv() to set them.
+
     :param condabase: Base name of the Conda environment, appended '_E5v4' and '_s6g1'".
     :return: str
     """
 
-    ret = [
-        textwrap.dedent(
-            """
-            # --- Functions to load/clean Conda environment ---
-
-            # check if a list contains a string
-            # param: string list
-            contains ()
-            {
-                local e match="$1"
-                shift
-                for e; do [[ "$e" == "$match" ]] && return 0; done
-                return 1
-            }
-
-            # print current environment
-            conda_echo_env()
-            {
-                echo "conda env: $CONDA_DEFAULT_ENV"
-            }
-
-            # deactivate all environments, except base
-            conda_deactivate ()
-            {
-                while [[ "$CONDA_DEFAULT_ENV" != "base" ]]; do
-                    conda deactivate
-                done
-                conda_echo_env
-            }
-
-            # activate environment starting from base
-            # param: environment_name
-            conda_activate ()
-            {
-                conda_deactivate
-                conda activate "$1"
-                conda_echo_env
-            }
-
-            # activate the first present environment
-            # param: environment_name ...
-            conda_activate_first_existing ()
-            {
-                conda_deactivate
-
-                ENVS=($(conda env list | awk '{print $1}'))
-
-                for env in "$@"
-                do
-                    if contains "$env" "${ENVS[@]}"; then
-                        conda activate "$env"
-                        conda_echo_env
-                        return 0
-                    fi
-                done
-
-                echo "ERROR: Failed to activate any environment"
-                exit 1
-            }
-
-            # remove and create environment(s)
-            # param: environment_name ...
-            conda_clean ()
-            {
-                conda_deactivate
-
-                ENVS=($(conda env list | awk '{print $1}'))
-
-                for env in "$@"
-                do
-                    if contains "$env" "${ENVS[@]}"; then
-                        echo "conda remove -n $env"
-                        conda env remove -n "$env"
-                    fi
-                    echo "conda create -n $env"
-                    mamba create -n "$env" -y
-                done
-            }
-
-            # get name postfix for current SYS_TYPE (return empty string if SYS_TYPE is unknown)
-            function get_simd_envname()
-            {
-                if [[ "${SYS_TYPE}" == *E5v4* ]]; then
-                    echo "_E5v4"
-                elif [[ "${SYS_TYPE}" == *s6g1* ]]; then
-                    echo "_s6g1"
-                elif [[ "${SYS_TYPE}" == *S6g1* ]]; then
-                    echo "_s6g1"
-                else
-                    echo ""
-                fi
-            }
-
-            # ---
-            """
-        )
+    ret = ["# Activate hardware optimised environment (or fallback environment)"]
+    ret += [
+        f'conda_activate_first_existing "{condabase}$(get_simd_envname)" "{condabase}"'
     ]
-
-    ret += ["# Activate hardware optimised environment (or fallback environment)"]
-    ret += [f'conda_activate_existing "{condabase}$(get_simd_envname)" "{condabase}"']
     ret += []
 
     return "\n".join(ret)
@@ -146,7 +77,7 @@ def snippet_flush(cmd):
     return "stdbuf -o0 -e0 " + cmd
 
 
-def script_exec(cmd, omp_num_threads=True, conda=True, flush=True):
+def script_exec(cmd, initenv=True, omp_num_threads=True, conda=True, flush=True):
     """
     Return code to execute a command.
     Optionally a number of extra commands are run before the command itself, see options.
@@ -158,6 +89,7 @@ def script_exec(cmd, omp_num_threads=True, conda=True, flush=True):
         slurm.script_exec(cmd, conda=dict(condabase="my"))
 
     :param cmd: The command.
+    :param initenv: Init the environment (see snippet_initenv()).
     :param omp_num_threads: Number of cores to use (see snippet_export_omp_num_threads()).
     :param conda: Load conda environment (see defaults of snippet_load_conda()).
     :param flush: Flush the buffer of stdout.
@@ -167,8 +99,8 @@ def script_exec(cmd, omp_num_threads=True, conda=True, flush=True):
     ret = []
 
     for opt, func in zip(
-        [omp_num_threads, conda],
-        [snippet_export_omp_num_threads, snippet_load_conda],
+        [initenv, omp_num_threads, conda],
+        [snippet_initenv, snippet_export_omp_num_threads, snippet_load_conda],
     ):
         if opt is True:
             ret += [func(), ""]
@@ -186,12 +118,63 @@ def script_exec(cmd, omp_num_threads=True, conda=True, flush=True):
     return "\n".join(ret)
 
 
+def serial(
+    command: str,
+    basename: str,
+    outdir: str = os.getcwd(),
+    sbatch: dict = None,
+    initenv=True,
+    omp_num_threads=True,
+    conda=True,
+    flush=True,
+):
+    """
+    Group a number of commands per job-script.
+
+    :param commands: List of commands.
+    :param basename: Base-name of the job-scripts (and their log-scripts),
+    :param outdir: Directory where to write the job-scripts (nothing in changed for the commands).
+    :param sbatch: Job options.
+    :param initenv: Init the environment (see snippet_initenv()).
+    :param omp_num_threads: Number of cores to use (see snippet_export_omp_num_threads()).
+    :param conda: Load conda environment (see defaults of snippet_load_conda()).
+    :param flush: Flush the buffer of stdout for each commands.
+    """
+
+    if sbatch is None:
+        sbatch = {}
+
+    assert "job-name" not in sbatch
+    assert "out" not in sbatch
+    sbatch.setdefault("nodes", 1)
+    sbatch.setdefault("ntasks", 1)
+    sbatch.setdefault("cpus-per-task", 1)
+    sbatch.setdefault("time", "24h")
+    sbatch.setdefault("account", slurm_defaults["account"])
+    sbatch.setdefault("partition", "serial")
+
+    command = script_exec(
+        command,
+        initenv=initenv,
+        omp_num_threads=omp_num_threads,
+        conda=conda,
+        flush=flush,
+    )
+
+    sbatch["job-name"] = basename
+    sbatch["out"] = basename + "_%j.out"
+
+    with open(os.path.join(outdir, basename + ".slurm"), "w") as file:
+        file.write(GooseSLURM.scripts.plain(command=command, **sbatch))
+
+
 def serial_group(
     commands: list[str],
     basename: str,
     group: int,
     outdir: str = os.getcwd(),
-    sbatch: dict = {},
+    sbatch: dict = None,
+    initenv=True,
     omp_num_threads=True,
     conda=True,
     flush=True,
@@ -204,6 +187,7 @@ def serial_group(
     :param group: Number of commands to group per job-script.
     :param outdir: Directory where to write the job-scripts (nothing in changed for the commands).
     :param sbatch: Job options.
+    :param initenv: Init the environment (see snippet_initenv()).
     :param omp_num_threads: Number of cores to use (see snippet_export_omp_num_threads()).
     :param conda: Load conda environment (see defaults of snippet_load_conda()).
     :param flush: Flush the buffer of stdout for each commands.
@@ -211,6 +195,9 @@ def serial_group(
 
     if len(commands) == 0:
         return
+
+    if sbatch is None:
+        sbatch = {}
 
     assert "job-name" not in sbatch
     assert "out" not in sbatch
@@ -233,6 +220,7 @@ def serial_group(
 
         command = script_exec(
             "\n".join(selection),
+            initenv=initenv,
             omp_num_threads=omp_num_threads,
             conda=conda,
             flush=False,
@@ -251,6 +239,9 @@ def cli_serial_group(cli_args=None):
     Job-script to run commands.
     """
 
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    docstring = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+
     if cli_args is None:
         cli_args = sys.argv[1:]
     else:
@@ -262,43 +253,15 @@ def cli_serial_group(cli_args=None):
         pass
 
     parser = argparse.ArgumentParser(
-        formatter_class=MyFormatter,
-        description=textwrap.dedent(cli_serial_group.__doc__),
+        formatter_class=MyFormatter, description=replace_entry_point(docstring)
     )
 
-    parser.add_argument(
-        "files",
-        nargs="*",
-        type=str,
-        help="Files to run",
-    )
-
-    parser.add_argument(
-        "-o", "--outdir", type=str, default=os.getcwd(), help="Output directory"
-    )
-
-    parser.add_argument(
-        "-c",
-        "--command",
-        type=str,
-        help="Command to use",
-    )
-
-    parser.add_argument(
-        "-n",
-        "--group",
-        type=int,
-        default=1,
-        help="Number of commands to group in a single job",
-    )
-
-    parser.add_argument(
-        "-w",
-        "--time",
-        type=str,
-        default="24h",
-        help="Walltime to allocate for the job",
-    )
+    parser.add_argument("-o", "--outdir", type=str, default=".", help="Output dir")
+    parser.add_argument("-c", "--command", type=str, help="Command to use")
+    parser.add_argument("-n", "--group", type=int, default=1, help="#commands to group")
+    parser.add_argument("-w", "--time", type=str, default="24h", help="Walltime")
+    parser.add_argument("-v", "--version", action="version", version=version)
+    parser.add_argument("files", nargs="*", type=str, help="Files")
 
     args = parser.parse_args(cli_args)
 
@@ -310,6 +273,51 @@ def cli_serial_group(cli_args=None):
         commands,
         basename=args.command,
         group=args.group,
+        outdir=args.outdir,
+        sbatch={"time": args.time},
+    )
+
+
+def cli_serial(cli_args=None):
+    """
+    Job-script to run a command.
+    """
+
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    docstring = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+
+    if cli_args is None:
+        cli_args = sys.argv[1:]
+    else:
+        cli_args = [str(arg) for arg in cli_args]
+
+    class MyFormatter(
+        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
+    ):
+        pass
+
+    parser = argparse.ArgumentParser(
+        formatter_class=MyFormatter, description=replace_entry_point(docstring)
+    )
+
+    parser.add_argument("-o", "--outdir", type=str, default=".", help="Output dir")
+    parser.add_argument(
+        "-n", "--name", type=str, help="Job name (default: from command)"
+    )
+    parser.add_argument("-w", "--time", type=str, default="24h", help="Walltime")
+    parser.add_argument("-v", "--version", action="version", version=version)
+    parser.add_argument("command", type=str, help="The command")
+
+    args = parser.parse_args(cli_args)
+
+    basename = args.name
+
+    if not basename:
+        basename = args.command.split(" ")[0]
+
+    serial(
+        args.command,
+        basename=basename,
         outdir=args.outdir,
         sbatch={"time": args.time},
     )
