@@ -15,6 +15,10 @@ import numpy as np
 import prrng
 import tqdm
 import XDMFWrite_h5py as xh
+import matplotlib.pyplot as plt
+import GooseMPL as gplt
+
+plt.style.use(["goose", "goose-latex"])
 
 from . import mesh
 from . import slurm
@@ -28,7 +32,9 @@ config = "FixedLever"
 entry_points = dict(
     cli_run="FixedLever_Run",
     cli_generate="FixedLever_Generate",
+    cli_plot="FixedLever_Plot",
     cli_ensembleinfo="FixedLever_EnsembleInfo",
+    cli_view_paraview="FixedLever_Paraview",
     cli_rerun_event="FixedLever_Events",
     cli_job_rerun_multislip="FixedLever_EventsJob",
 )
@@ -964,7 +970,6 @@ def basic_output(
     system: model.System,
     file: h5py.File,
     verbose: bool = True,
-    boundcheck_right: int = 5,
 ) -> dict:
     """
     Read basic output from simulation.
@@ -972,7 +977,6 @@ def basic_output(
     :param system: The system (modified: all increments visited).
     :param file: Open simulation HDF5 archive (read-only).
     :param verbose: Print progress.
-    :param boundcheck_right: Exclude data that is ``n`` potentials from the right.
     """
 
     incs = file["/stored"][...]
@@ -1043,11 +1047,9 @@ def basic_output(
         Eps = system.Eps() / ret["eps0"]
         idx = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, ret["N"])
 
-        if boundcheck_right:
-            print("check")
-            if system.boundcheck_right(boundcheck_right):
-                maxinc = inc
-                break
+        if not system.boundcheck_right(5):
+            maxinc = inc
+            break
 
         for i in range(nlayer):
             e = system.layerElements(i)
@@ -1084,6 +1086,59 @@ def basic_output(
     return ret
 
 
+def cli_plot(cli_args=None):
+    """
+    Plot basic output.
+    """
+
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    docstring = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+    progname = entry_points[funcname]
+
+    if cli_args is None:
+        cli_args = sys.argv[1:]
+    else:
+        cli_args = [str(arg) for arg in cli_args]
+
+    class MyFormatter(
+        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
+    ):
+        pass
+
+    parser = argparse.ArgumentParser(
+        formatter_class=MyFormatter, description=replace_entry_point(docstring)
+    )
+
+    parser.add_argument("-o", "--output", type=str, help="Output file")
+    parser.add_argument("-f", "--force", action="store_true", help="Force overwrite")
+    parser.add_argument("-v", "--version", action="version", version=version)
+    parser.add_argument("file", type=str, help="File to read")
+
+    args = parser.parse_args(cli_args)
+
+    assert os.path.isfile(os.path.realpath(args.file))
+
+    if args.output:
+        if not args.force:
+            if os.path.isfile(args.output):
+                if not click.confirm(f'Overwrite "{args.output}"?'):
+                    raise OSError("Cancelled")
+
+    with h5py.File(args.file, "r") as file:
+        system = System.init(file)
+        out = basic_output(system, file, verbose=False)
+
+    fig, ax = plt.subplots()
+    ax.plot(out["epsd"], out["sigd"])
+
+    if args.output:
+        fig.savefig(args.output)
+    else:
+        plt.show()
+
+    plt.close(fig)
+
+
 def cli_ensembleinfo(cli_args=None):
     """
     Read information (avalanche size, stress, strain, ...) of an ensemble, and combine into
@@ -1110,7 +1165,6 @@ def cli_ensembleinfo(cli_args=None):
     )
 
     parser.add_argument("-o", "--output", type=str, default=output, help="Output file")
-    parser.add_argument("-F", "--full", action="store_true", help="No boundscheck")
     parser.add_argument("-f", "--force", action="store_true", help="Force overwrite")
     parser.add_argument("-v", "--version", action="version", version=version)
     parser.add_argument("files", nargs="*", type=str, help="Files to read")
@@ -1177,10 +1231,7 @@ def cli_ensembleinfo(cli_args=None):
                 system.reset_epsy(System.read_epsy(file))
 
             # read output
-            if args.full:
-                out = basic_output(system, file, verbose=False, boundcheck_right=False)
-            else:
-                out = basic_output(system, file, verbose=False)
+            out = basic_output(system, file, verbose=False)
             seeds += [out["seed"]]
 
             # store/check normalisation
