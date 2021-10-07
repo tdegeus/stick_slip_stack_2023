@@ -5,6 +5,7 @@ import unittest
 
 import GooseHDF5 as g5
 import h5py
+import numpy as np
 
 root = os.path.join(os.path.dirname(__file__), "..")
 if os.path.exists(os.path.join(root, "mycode_lever", "_version.py")):
@@ -14,6 +15,10 @@ import mycode_lever as my  # noqa: E402
 
 
 class MyTests(unittest.TestCase):
+    """
+    Tests
+    """
+
     def test_generate(self):
 
         dirname = "mytest"
@@ -50,6 +55,8 @@ class MyTests(unittest.TestCase):
         filename = os.path.join(dirname, idname)
         infoname = os.path.join(dirname, "EnsembleInfo.h5")
         eventname = os.path.join(dirname, "events.h5")
+        delta_gamma = 1e-4 * np.ones(5)
+        delta_gamma[0] = 0
 
         if not os.path.isdir(dirname):
             os.makedirs(dirname)
@@ -61,11 +68,11 @@ class MyTests(unittest.TestCase):
             seed=0,
             k_drive=1e-3,
             symmetric=True,
-            delta_gamma=[0, 0.005, 0.01, 0.015],
+            delta_gamma=delta_gamma,
         )
 
         my.FixedLever.cli_run([filename, "-f"])
-        my.FixedLever.cli_ensembleinfo(["-o", infoname, "-F", filename])
+        my.FixedLever.cli_ensembleinfo(["-o", infoname, filename])
         my.FixedLever.cli_view_paraview([filename])
         my.FixedLever.cli_rerun_event([filename, "-i", 1, "-o", eventname])
         my.FixedLever.cli_job_rerun_multislip([infoname, "-o", dirname])
