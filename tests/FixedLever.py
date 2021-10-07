@@ -7,7 +7,9 @@ import GooseHDF5 as g5
 import h5py
 
 root = os.path.join(os.path.dirname(__file__), "..")
-sys.path.insert(0, os.path.abspath(root))
+if os.path.exists(os.path.join(root, "mycode_lever", "_version.py")):
+    sys.path.insert(0, os.path.abspath(root))
+
 import mycode_lever as my  # noqa: E402
 
 
@@ -63,7 +65,7 @@ class MyTests(unittest.TestCase):
         )
 
         my.FixedLever.cli_run([filename, "-f"])
-        my.FixedLever.cli_ensembleinfo(["-o", infoname, filename])
+        my.FixedLever.cli_ensembleinfo(["-o", infoname, "-F", filename])
         my.FixedLever.cli_view_paraview([filename])
         my.FixedLever.cli_rerun_event([filename, "-i", 1, "-o", eventname])
         my.FixedLever.cli_job_rerun_multislip([infoname, "-o", dirname])
