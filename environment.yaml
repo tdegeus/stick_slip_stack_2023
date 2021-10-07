@@ -4,6 +4,7 @@ dependencies:
 - cmake
 - cpppath
 - docopt.cpp
+- enstat
 - fmt
 - frictionqpotfem
 - gmatelastoplasticqpot
@@ -13,16 +14,16 @@ dependencies:
 - h5py
 - highfive
 - make
+- nested_dict
 - ninja
 - parallel
-- pip
-- prrng
-- pybind11
+- pre-commit
 - python
 - python-frictionqpotfem
 - python-gmatelastoplasticqpot
 - python-goosefem
 - python-prrng
+- python-qpot
 - setuptools_scm
 - shelephant
 - tqdm

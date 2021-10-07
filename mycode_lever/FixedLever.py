@@ -1,9 +1,10 @@
 import argparse
+import inspect
 import itertools
 import os
+import re
 import sys
 import textwrap
-import inspect
 
 import click
 import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
@@ -959,7 +960,12 @@ def cli_job_rerun_multislip(cli_args=None):
     )
 
 
-def basic_output(system: model.System, file: h5py.File, verbose: bool = True, boundcheck_right: int = 5) -> dict:
+def basic_output(
+    system: model.System,
+    file: h5py.File,
+    verbose: bool = True,
+    boundcheck_right: int = 5,
+) -> dict:
     """
     Read basic output from simulation.
 
@@ -1058,7 +1064,18 @@ def basic_output(system: model.System, file: h5py.File, verbose: bool = True, bo
         idx_n = np.array(idx, copy=True)
 
     if maxinc:
-        trucate = ["epsd", "sigd", "epsd_layers", "sigd_layers", "S_layers", "A_layers", "drive_ux", "drive_fx", "layers_ux", "layers_tx"]
+        trucate = [
+            "epsd",
+            "sigd",
+            "epsd_layers",
+            "sigd_layers",
+            "S_layers",
+            "A_layers",
+            "drive_ux",
+            "drive_fx",
+            "layers_ux",
+            "layers_tx",
+        ]
         for key in trucate:
             ret[key] = ret[key][:maxinc, ...]
 
@@ -1092,7 +1109,7 @@ def cli_ensembleinfo(cli_args=None):
         formatter_class=MyFormatter, description=replace_entry_point(docstring)
     )
 
-    parser.add_argument("-o", "--output",type=str,default=output,help="Output file")
+    parser.add_argument("-o", "--output", type=str, default=output, help="Output file")
     parser.add_argument("-F", "--full", action="store_true", help="No boundscheck")
     parser.add_argument("-f", "--force", action="store_true", help="Force overwrite")
     parser.add_argument("-v", "--version", action="version", version=version)
