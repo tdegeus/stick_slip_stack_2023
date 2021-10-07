@@ -4,7 +4,9 @@ import sys
 import unittest
 
 root = os.path.join(os.path.dirname(__file__), "..")
-sys.path.insert(0, os.path.abspath(root))
+if os.path.exists(os.path.join(root, "mycode_lever", "_version.py")):
+    sys.path.insert(0, os.path.abspath(root))
+
 import mycode_lever as my  # noqa: E402
 
 

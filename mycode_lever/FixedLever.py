@@ -3,6 +3,7 @@ import itertools
 import os
 import sys
 import textwrap
+import inspect
 
 import click
 import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
@@ -31,7 +32,10 @@ entry_points = dict(
     cli_job_rerun_multislip="FixedLever_EventsJob",
 )
 
-file_defaults = dict(cli_ensembleinfo="EnsembleInfo.h5")
+file_defaults = dict(
+    cli_ensembleinfo="EnsembleInfo.h5",
+    cli_rerun_event="FixedLever_Events.h5",
+)
 
 
 def dependencies(system: model.System) -> list[str]:
@@ -42,12 +46,21 @@ def dependencies(system: model.System) -> list[str]:
     return sorted(list(model.version_dependencies()) + ["prrng=" + prrng.version()])
 
 
+def replace_entry_point(docstring):
+    """
+    Replace ":py:func:`...`" with the relevant entry_point name
+    """
+    for ep in entry_points:
+        docstring = docstring.replace(fr":py:func:`{ep:s}`", entry_points[ep])
+    return docstring
+
+
 def interpret_filename(filename):
     """
     Split filename in useful information.
     """
 
-    part = os.path.splitext(os.path.basename(filename))[0].split("_")
+    part = re.split("_|/", os.path.splitext(filename)[0])
     info = {}
 
     for i in part:
@@ -476,6 +489,9 @@ def cli_generate(cli_args=None):
     Generate IO files, including job-scripts to run simulations.
     """
 
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    docstring = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+
     if cli_args is None:
         cli_args = sys.argv[1:]
     else:
@@ -487,23 +503,15 @@ def cli_generate(cli_args=None):
         pass
 
     parser = argparse.ArgumentParser(
-        formatter_class=MyFormatter,
-        description=textwrap.dedent(cli_generate.__doc__),
+        formatter_class=MyFormatter, description=replace_entry_point(docstring)
     )
 
-    parser.add_argument(
-        "outdir",
-        type=str,
-        help="Output directory",
-    )
-
-    parser.add_argument(
-        "-N",
-        "--size",
-        type=int,
-        default=2 * (3 ** 6),
-        help="Number of plastic blocks, per weak layer",
-    )
+    parser.add_argument("outdir", type=str, help="Output directory")
+    parser.add_argument("-N", "--size", type=int, default=2 * (3 ** 6), help="#blocks")
+    parser.add_argument("-n", "--nsim", type=int, default=1, help="#simulations")
+    parser.add_argument("-s", "--start", type=int, default=0, help="Start simulation")
+    parser.add_argument("-w", "--time", type=str, default="72h", help="Walltime")
+    parser.add_argument("-v", "--version", action="version", version=version)
 
     parser.add_argument(
         "-l",
@@ -534,44 +542,6 @@ def cli_generate(cli_args=None):
         help="Set the symmetry of the drive spring (True/False)",
     )
 
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=0,
-        help="Base of all seeds of all realisations (should normally not be changed)",
-    )
-
-    parser.add_argument(
-        "-n",
-        "--nsim",
-        type=int,
-        default=1,
-        help="Number of simulations to generate",
-    )
-
-    parser.add_argument(
-        "-s",
-        "--start",
-        type=int,
-        default=0,
-        help="Starting simulation (sets the seed)",
-    )
-
-    parser.add_argument(
-        "-w",
-        "--time",
-        type=str,
-        default="72h",
-        help="Walltime to allocate for the job",
-    )
-
-    parser.add_argument(
-        "-v",
-        "--version",
-        action="version",
-        version=version,
-    )
-
     args = parser.parse_args(cli_args)
 
     assert os.path.isdir(os.path.realpath(args.outdir))
@@ -595,7 +565,7 @@ def cli_generate(cli_args=None):
             filename=os.path.join(args.outdir, filename),
             N=args.size,
             nplates=nplates,
-            seed=args.seed + i * args.size * (args.max_plates - 1),
+            seed=i * args.size * (args.max_plates - 1),
             k_drive=args.k,
             symmetric=args.symmetric,
         )
@@ -720,6 +690,9 @@ def cli_run(cli_args=None):
     Run simulation.
     """
 
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    docstring = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+
     if cli_args is None:
         cli_args = sys.argv[1:]
     else:
@@ -731,29 +704,12 @@ def cli_run(cli_args=None):
         pass
 
     parser = argparse.ArgumentParser(
-        formatter_class=MyFormatter,
-        description=textwrap.dedent(cli_run.__doc__),
+        formatter_class=MyFormatter, description=replace_entry_point(docstring)
     )
 
-    parser.add_argument(
-        "file",
-        type=str,
-        help="Simulation file",
-    )
-
-    parser.add_argument(
-        "-f",
-        "--force",
-        action="store_true",
-        help="Allow uncommitted changed",
-    )
-
-    parser.add_argument(
-        "-v",
-        "--version",
-        action="version",
-        version=version,
-    )
+    parser.add_argument("-f", "--force", action="store_true", help="Allow uncommitted")
+    parser.add_argument("-v", "--version", action="version", version=version)
+    parser.add_argument("file", type=str, help="Simulation file")
 
     args = parser.parse_args(cli_args)
 
@@ -825,6 +781,11 @@ def cli_rerun_event(cli_args=None):
     Rerun increments and store basic event info.
     """
 
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    docstring = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+    progname = entry_points[funcname]
+    output = file_defaults[funcname]
+
     if cli_args is None:
         cli_args = sys.argv[1:]
     else:
@@ -836,22 +797,7 @@ def cli_rerun_event(cli_args=None):
         pass
 
     parser = argparse.ArgumentParser(
-        formatter_class=MyFormatter,
-        description=textwrap.dedent(cli_rerun_event.__doc__),
-    )
-
-    parser.add_argument(
-        "file",
-        type=str,
-        help="Simulation file",
-    )
-
-    parser.add_argument(
-        "-i",
-        "--inc",
-        required=True,
-        type=int,
-        help="Increment number",
+        formatter_class=MyFormatter, description=replace_entry_point(docstring)
     )
 
     parser.add_argument(
@@ -861,30 +807,13 @@ def cli_rerun_event(cli_args=None):
         help="Truncate at a given maximal total S",
     )
 
-    parser.add_argument(
-        "-o",
-        "--output",
-        type=str,
-        default="events.h5",
-        help="Output file",
-    )
-
-    parser.add_argument(
-        "-f",
-        "--force",
-        action="store_true",
-        help="Overwrite existing output / Allow uncommitted changed",
-    )
-
-    parser.add_argument(
-        "-v",
-        "--version",
-        action="version",
-        version=version,
-    )
+    parser.add_argument("-o", "--output", type=str, default=output, help="Output file")
+    parser.add_argument("-i", "--inc", required=True, type=int, help="Increment number")
+    parser.add_argument("-f", "--force", action="store_true", help="Allow uncommitted")
+    parser.add_argument("-v", "--version", action="version", version=version)
+    parser.add_argument("file", type=str, help="Simulation file")
 
     args = parser.parse_args(cli_args)
-    progname = entry_points["cli_rerun_event"]
 
     assert os.path.isfile(os.path.realpath(args.file))
 
@@ -913,6 +842,9 @@ def cli_job_rerun_multislip(cli_args=None):
     Rerun increments that have events in which more than one layer slips.
     """
 
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    docstring = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+
     if cli_args is None:
         cli_args = sys.argv[1:]
     else:
@@ -924,8 +856,7 @@ def cli_job_rerun_multislip(cli_args=None):
         pass
 
     parser = argparse.ArgumentParser(
-        formatter_class=MyFormatter,
-        description=textwrap.dedent(cli_job_rerun_multislip.__doc__),
+        formatter_class=MyFormatter, description=replace_entry_point(docstring)
     )
 
     parser.add_argument("info", type=str, help="EnsembleInfo (read-only)")
@@ -1028,13 +959,14 @@ def cli_job_rerun_multislip(cli_args=None):
     )
 
 
-def basic_output(system: model.System, file: h5py.File, verbose: bool = True) -> dict:
+def basic_output(system: model.System, file: h5py.File, verbose: bool = True, boundcheck_right: int = 5) -> dict:
     """
     Read basic output from simulation.
 
     :param system: The system (modified: all increments visited).
     :param file: Open simulation HDF5 archive (read-only).
     :param verbose: Print progress.
+    :param boundcheck_right: Exclude data that is ``n`` potentials from the right.
     """
 
     incs = file["/stored"][...]
@@ -1086,6 +1018,8 @@ def basic_output(system: model.System, file: h5py.File, verbose: bool = True) ->
     ret["layers_ux"] = np.zeros((ninc, nlayer), dtype=float)
     ret["layers_tx"] = np.zeros((ninc, nlayer), dtype=float)
 
+    maxinc = None
+
     for inc in tqdm.tqdm(incs, disable=not verbose):
 
         ubar = file[f"/drive/ubar/{inc:d}"][...]
@@ -1103,6 +1037,12 @@ def basic_output(system: model.System, file: h5py.File, verbose: bool = True) ->
         Eps = system.Eps() / ret["eps0"]
         idx = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, ret["N"])
 
+        if boundcheck_right:
+            print("check")
+            if system.boundcheck_right(boundcheck_right):
+                maxinc = inc
+                break
+
         for i in range(nlayer):
             e = system.layerElements(i)
             E = np.average(Eps[e, ...], weights=dV[e, ...], axis=(0, 1))
@@ -1117,6 +1057,11 @@ def basic_output(system: model.System, file: h5py.File, verbose: bool = True) ->
 
         idx_n = np.array(idx, copy=True)
 
+    if maxinc:
+        trucate = ["epsd", "sigd", "epsd_layers", "sigd_layers", "S_layers", "A_layers", "drive_ux", "drive_fx", "layers_ux", "layers_tx"]
+        for key in trucate:
+            ret[key] = ret[key][:maxinc, ...]
+
     ret["steadystate"] = System.steadystate(**ret)
 
     return ret
@@ -1127,6 +1072,11 @@ def cli_ensembleinfo(cli_args=None):
     Read information (avalanche size, stress, strain, ...) of an ensemble, and combine into
     a single output file.
     """
+
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    docstring = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+    progname = entry_points[funcname]
+    output = file_defaults[funcname]
 
     if cli_args is None:
         cli_args = sys.argv[1:]
@@ -1139,36 +1089,16 @@ def cli_ensembleinfo(cli_args=None):
         pass
 
     parser = argparse.ArgumentParser(
-        formatter_class=MyFormatter,
-        description=textwrap.dedent(cli_ensembleinfo.__doc__),
+        formatter_class=MyFormatter, description=replace_entry_point(docstring)
     )
 
-    parser.add_argument(
-        "-o",
-        "--output",
-        type=str,
-        default=file_defaults["cli_ensembleinfo"],
-        help="Output file",
-    )
-
-    parser.add_argument(
-        "-f",
-        "--force",
-        action="store_true",
-        help="Force overwrite of output file if it exists",
-    )
-
-    parser.add_argument(
-        "-v",
-        "--version",
-        action="version",
-        version=version,
-    )
-
+    parser.add_argument("-o", "--output",type=str,default=output,help="Output file")
+    parser.add_argument("-F", "--full", action="store_true", help="No boundscheck")
+    parser.add_argument("-f", "--force", action="store_true", help="Force overwrite")
+    parser.add_argument("-v", "--version", action="version", version=version)
     parser.add_argument("files", nargs="*", type=str, help="Files to read")
 
     args = parser.parse_args(cli_args)
-    progname = entry_points["cli_ensembleinfo"]
 
     assert len(args.files) > 0
     assert np.all([os.path.isfile(os.path.realpath(file)) for file in args.files])
@@ -1230,7 +1160,10 @@ def cli_ensembleinfo(cli_args=None):
                 system.reset_epsy(System.read_epsy(file))
 
             # read output
-            out = basic_output(system, file, verbose=False)
+            if args.full:
+                out = basic_output(system, file, verbose=False, boundcheck_right=False)
+            else:
+                out = basic_output(system, file, verbose=False)
             seeds += [out["seed"]]
 
             # store/check normalisation
@@ -1314,6 +1247,9 @@ def cli_view_paraview(cli_args=None):
     Create files to view with ParaView.
     """
 
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    docstring = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+
     if cli_args is None:
         cli_args = sys.argv[1:]
     else:
@@ -1325,8 +1261,7 @@ def cli_view_paraview(cli_args=None):
         pass
 
     parser = argparse.ArgumentParser(
-        formatter_class=MyFormatter,
-        description=textwrap.dedent(cli_view_paraview.__doc__),
+        formatter_class=MyFormatter, description=replace_entry_point(docstring)
     )
 
     parser.add_argument(
@@ -1337,20 +1272,8 @@ def cli_view_paraview(cli_args=None):
         help="Prefix files to create dedicated Paraview files.",
     )
 
-    parser.add_argument(
-        "-f",
-        "--force",
-        action="store_true",
-        help="Force overwrite of output file if it exists",
-    )
-
-    parser.add_argument(
-        "-v",
-        "--version",
-        action="version",
-        version=version,
-    )
-
+    parser.add_argument("-f", "--force", action="store_true", help="Force overwrite")
+    parser.add_argument("-v", "--version", action="version", version=version)
     parser.add_argument("files", nargs="*", type=str, help="Files to read")
 
     args = parser.parse_args(cli_args)
