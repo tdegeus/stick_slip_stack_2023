@@ -10,6 +10,7 @@ import click
 import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
 import GMatElastoPlasticQPot.Cartesian2d as GMat
 import GooseFEM
+import GooseHDF5 as g5
 import h5py
 import numpy as np
 import prrng
@@ -17,6 +18,8 @@ import tqdm
 import XDMFWrite_h5py as xh
 import matplotlib.pyplot as plt
 import GooseMPL as gplt
+
+from collections import defaultdict
 
 plt.style.use(["goose", "goose-latex"])
 
@@ -32,6 +35,7 @@ config = "FixedLever"
 entry_points = dict(
     cli_run="FixedLever_Run",
     cli_generate="FixedLever_Generate",
+    cli_compare="FixedLever_Compare",
     cli_plot="FixedLever_Plot",
     cli_ensembleinfo="FixedLever_EnsembleInfo",
     cli_view_paraview="FixedLever_Paraview",
@@ -586,6 +590,82 @@ def cli_generate(cli_args=None):
         outdir=args.outdir,
         sbatch={"time": args.time},
     )
+
+
+def compare(a: h5py.File, b: h5py.File):
+    """
+    Compare two file: will be replaced by :py:func:`GooseHDF5.compare`.
+    """
+
+    paths_a = list(g5.getdatasets(a, fold=["/disp", "/drive/ubar"]))
+    paths_b = list(g5.getdatasets(b, fold=["/disp", "/drive/ubar"]))
+    paths_a = [p for p in paths_a if p[-3:] != "..."]
+    paths_b = [p for p in paths_b if p[-3:] != "..."]
+    ret = defaultdict(list)
+
+    not_in_b = [str(i) for i in np.setdiff1d(paths_a, paths_b)]
+    not_in_a = [str(i) for i in np.setdiff1d(paths_b, paths_a)]
+    inboth = [str(i) for i in np.intersect1d(paths_a, paths_b)]
+
+    for path in not_in_a:
+        ret["<-"].append(path)
+
+    for path in not_in_b:
+        ret["->"].append(path)
+
+    for path in inboth:
+        if not g5.equal(a, b, path):
+            ret["!="].append(path)
+
+    return ret
+
+
+def cli_compare(cli_args=None):
+    """
+    Compare input files.
+    """
+
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    docstring = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+
+    if cli_args is None:
+        cli_args = sys.argv[1:]
+    else:
+        cli_args = [str(arg) for arg in cli_args]
+
+    class MyFormatter(
+        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
+    ):
+        pass
+
+    parser = argparse.ArgumentParser(
+        formatter_class=MyFormatter, description=replace_entry_point(docstring)
+    )
+
+    parser.add_argument("-v", "--version", action="version", version=version)
+    parser.add_argument("--develop", action="store_true", help="For testing")
+    parser.add_argument("file_a", type=str, help="Simulation file")
+    parser.add_argument("file_b", type=str, help="Simulation file")
+
+    args = parser.parse_args(cli_args)
+
+    assert os.path.isfile(os.path.realpath(args.file_a))
+    assert os.path.isfile(os.path.realpath(args.file_b))
+
+    with h5py.File(args.file_a, "r") as a:
+        with h5py.File(args.file_b, "r") as b:
+            ret = compare(a, b)
+
+    for key in ret:
+        if key in ["=="]:
+            continue
+        for path in ret[key]:
+            print(key, path)
+
+    if args.develop:
+        return ret
+    else:
+        return 0
 
 
 def run(filename: str, dev: bool):

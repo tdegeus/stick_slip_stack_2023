@@ -27,6 +27,9 @@ class MyTests(unittest.TestCase):
         if not os.path.isdir(dirname):
             os.makedirs(dirname)
 
+        if os.path.exists(file_a):
+            os.remove(file_a)
+
         my.FixedLever.generate(
             filename=file_a,
             N=9,
@@ -45,6 +48,43 @@ class MyTests(unittest.TestCase):
             with h5py.File(file_b, "r") as dest:
                 for path in g5.getdatasets(source):
                     self.assertTrue(g5.equal(source, dest, path))
+
+        shutil.rmtree(dirname)
+
+    def test_compare(self):
+
+        dirname = "mytest"
+        file_a = os.path.join(dirname, "id=0.h5")
+        file_b = os.path.join(dirname, "id=1.h5")
+
+        if not os.path.isdir(dirname):
+            os.makedirs(dirname)
+
+        for file in [file_a, file_b]:
+            if os.path.exists(file):
+                os.remove(file)
+
+        my.FixedLever.generate(
+            filename=file_a,
+            N=9,
+            nplates=2,
+            seed=0,
+            k_drive=1e-3,
+            symmetric=True,
+        )
+
+        my.FixedLever.generate(
+            filename=file_b,
+            N=9,
+            nplates=2,
+            seed=0,
+            k_drive=2e-3,
+            symmetric=True,
+        )
+
+        ret = my.FixedLever.cli_compare(["--develop", file_a, file_b])
+        expect = {"!=": ["/drive/delta_gamma", "/drive/k"]}
+        self.assertEqual(ret, expect)
 
         shutil.rmtree(dirname)
 
