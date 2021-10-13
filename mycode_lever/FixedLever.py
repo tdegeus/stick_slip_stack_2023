@@ -201,16 +201,10 @@ def generate(
     if delta_gamma is None:
 
         # make the first n increments bigger to transverse the non-steady-state part faster
-        # to estimate n use an historic observations, indicated as "dummy" here
+        # to estimate n use an historic (version < 4.4.dev30+g1ccc1d3) observations in ``ss``
 
-        dummy_k = 1e-3
-        dummy_eps0 = 0.5 * 1e-4
-        dummy_delta = 2.5e-07
-        dummy_delta * dummy_k / dummy_eps0
-        dummy_ss = 100 * 2.5e-07
-
-        delta = 2e-6 * eps0 / k_drive
-        ss = int(dummy_ss / delta * dummy_k / k_drive)
+        delta = 2e-3 * eps0
+        ss = int(100 * 2.5e-07 / delta)
 
         delta_gamma = np.concatenate(
             (
@@ -604,6 +598,7 @@ def cli_run(cli_args=None):
         args = parser.parse_args([str(arg) for arg in cli_args])
 
     assert os.path.isfile(os.path.realpath(args.file))
+
     System.run(
         config=config,
         progname=entry_points[funcname],

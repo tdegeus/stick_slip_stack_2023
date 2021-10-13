@@ -83,7 +83,7 @@ class MyTests(unittest.TestCase):
         )
 
         ret = my.System.cli_compare([file_a, file_b])
-        expect = {"!=": ["/drive/delta_gamma", "/drive/k"]}
+        expect = {"!=": ["/drive/k"]}
         self.assertEqual(ret, expect)
 
         shutil.rmtree(dirname)
