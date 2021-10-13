@@ -5,13 +5,11 @@ import os
 import re
 import sys
 import textwrap
-from collections import defaultdict
 
 import click
 import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
 import GMatElastoPlasticQPot.Cartesian2d as GMat
 import GooseFEM
-import GooseHDF5 as g5
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
@@ -32,7 +30,6 @@ plt.style.use(["goose", "goose-latex"])
 config = "FixedLever"
 
 entry_points = dict(
-    cli_compare="FixedLever_Compare",
     cli_ensembleinfo="FixedLever_EnsembleInfo",
     cli_find_completed="FixedLever_FindCompleted",
     cli_generate="FixedLever_Generate",
@@ -45,17 +42,9 @@ entry_points = dict(
 
 file_defaults = dict(
     cli_ensembleinfo="EnsembleInfo.h5",
-    cli_find_completed="FixedLever_Completed.yaml",
+    cli_find_completed="completed.yaml",
     cli_rerun_event="FixedLever_Events.h5",
 )
-
-
-def dependencies(system: model.System) -> list[str]:
-    """
-    Return list with version strings.
-    Compared to model.System.version_dependencies() this added the version of prrng.
-    """
-    return sorted(list(model.version_dependencies()) + ["prrng=" + prrng.version()])
 
 
 def replace_entry_point(doc):
@@ -67,25 +56,14 @@ def replace_entry_point(doc):
     return doc
 
 
-def interpret_filename(filename):
+def init(file: h5py.File) -> model.System:
     """
-    Split filename in useful information.
+    Initialise system from file.
+
+    :param file: Open simulation HDF5 archive (read-only).
+    :return: The initialised system.
     """
-
-    part = re.split("_|/", os.path.splitext(filename)[0])
-    info = {}
-
-    for i in part:
-        key, value = i.split("=")
-        info[key] = value
-
-    for key in info:
-        if key in ["kplate"]:
-            info[key] = float(info[key])
-        else:
-            info[key] = int(info[key])
-
-    return info
+    return System.init(file, model)
 
 
 def generate(
@@ -606,170 +584,6 @@ def cli_generate(cli_args=None):
     )
 
 
-def compare(a: h5py.File, b: h5py.File):
-    """
-    Compare two file: will be replaced by :py:func:`GooseHDF5.compare`.
-    """
-
-    paths_a = list(g5.getdatasets(a, fold=["/disp", "/drive/ubar"]))
-    paths_b = list(g5.getdatasets(b, fold=["/disp", "/drive/ubar"]))
-    paths_a = [p for p in paths_a if p[-3:] != "..."]
-    paths_b = [p for p in paths_b if p[-3:] != "..."]
-    ret = defaultdict(list)
-
-    not_in_b = [str(i) for i in np.setdiff1d(paths_a, paths_b)]
-    not_in_a = [str(i) for i in np.setdiff1d(paths_b, paths_a)]
-    inboth = [str(i) for i in np.intersect1d(paths_a, paths_b)]
-
-    for path in not_in_a:
-        ret["<-"].append(path)
-
-    for path in not_in_b:
-        ret["->"].append(path)
-
-    for path in inboth:
-        if not g5.equal(a, b, path):
-            ret["!="].append(path)
-
-    return ret
-
-
-def cli_compare(cli_args=None):
-    """
-    Compare input files.
-    """
-
-    class MyFmt(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
-        pass
-
-    funcname = inspect.getframeinfo(inspect.currentframe()).function
-    doc = textwrap.dedent(inspect.getdoc(globals()[funcname]))
-    parser = argparse.ArgumentParser(formatter_class=MyFmt, description=replace_entry_point(doc))
-
-    parser.add_argument("-v", "--version", action="version", version=version)
-    parser.add_argument("file_a", type=str, help="Simulation file")
-    parser.add_argument("file_b", type=str, help="Simulation file")
-
-    if cli_args is None:
-        args = parser.parse_args(sys.argv[1:])
-    else:
-        args = parser.parse_args([str(arg) for arg in cli_args])
-
-    assert os.path.isfile(os.path.realpath(args.file_a))
-    assert os.path.isfile(os.path.realpath(args.file_b))
-
-    with h5py.File(args.file_a, "r") as a:
-        with h5py.File(args.file_b, "r") as b:
-            ret = compare(a, b)
-
-    for key in ret:
-        if key in ["=="]:
-            continue
-        for path in ret[key]:
-            print(key, path)
-
-    if cli_args is not None:
-        return ret
-
-
-def run(filename: str, dev: bool):
-    """
-    Run the simulation.
-
-    :param filename: Name of the input/output file (appended).
-    :param dev: Allow uncommitted changes.
-    """
-
-    basename = os.path.basename(filename)
-    progname = entry_points["cli_run"]
-
-    with h5py.File(filename, "a") as file:
-
-        system = System.init(file)
-
-        # check version compatibility
-
-        assert dev or not tag.has_uncommited(version)
-        assert dev or not tag.any_has_uncommited(dependencies(model))
-
-        if f"/meta/{config}/{progname}" not in file:
-            meta = file.create_group(f"/meta/{config}/{progname}")
-            meta.attrs["version"] = version
-            meta.attrs["dependencies"] = dependencies(model)
-        else:
-            meta = file[f"/meta/{config}/{progname}"]
-
-        if "completed" in meta:
-            print("Marked completed, skipping")
-            return 1
-
-        assert tag.equal(version, meta.attrs["version"])
-        assert tag.all_equal(dependencies(model), meta.attrs["dependencies"])
-
-        # restore or initialise the system / output
-
-        if "/stored" in file:
-
-            inc = int(file["/stored"][-1])
-            system.setT(file["/t"][inc])
-            system.setU(file[f"/disp/{inc:d}"][...])
-            system.layerSetTargetUbar(file[f"/drive/ubar/{inc:d}"][...])
-            print(f'"{basename}": Loading, inc = {inc:d}')
-
-        else:
-
-            inc = int(0)
-            desc = '(end of increment). One entry per item in "/stored".'
-
-            storage.dset_extendible1d(
-                file=file,
-                key="/stored",
-                dtype=np.uint64,
-                value=inc,
-                desc="List of stored increments.",
-            )
-
-            storage.dset_extendible1d(
-                file=file,
-                key="/t",
-                dtype=np.float64,
-                value=system.t(),
-                desc=f"Time {desc}",
-            )
-
-            file[f"/disp/{inc}"] = system.u()
-            file["/disp"].attrs["desc"] = f"Displacement {desc}"
-
-            file[f"/drive/ubar/{inc}"] = system.layerTargetUbar()
-            file["/drive/ubar"].attrs["desc"] = f"Loading frame position per layer {desc}"
-
-        # run
-
-        height = file["/drive/height"][...]
-        delta_gamma = file["/drive/delta_gamma"][...]
-
-        assert np.isclose(delta_gamma[0], 0.0)
-        inc += 1
-
-        for dgamma in delta_gamma[inc:]:
-
-            system.layerTagetUbar_addAffineSimpleShear(dgamma, height)
-            niter = system.minimise()
-            if not system.boundcheck_right(5):
-                break
-            print(f'"{basename}": inc = {inc:8d}, niter = {niter:8d}')
-
-            storage.dset_extend1d(file, "/stored", inc, inc)
-            storage.dset_extend1d(file, "/t", inc, system.t())
-            file[f"/disp/{inc:d}"] = system.u()
-            file[f"/drive/ubar/{inc:d}"] = system.layerTargetUbar()
-
-            inc += 1
-
-        print(f'"{basename}": completed')
-        meta.attrs["completed"] = 1
-
-
 def cli_run(cli_args=None):
     """
     Run simulation.
@@ -792,7 +606,7 @@ def cli_run(cli_args=None):
         args = parser.parse_args([str(arg) for arg in cli_args])
 
     assert os.path.isfile(os.path.realpath(args.file))
-    run(args.file, dev=args.develop)
+    System.run(config=config, progname=entry_points[funcname], model=model, init_function=init, filepath=args.file, dev=args.develop)
 
 
 def find_completed(filepaths: list[str]) -> list[str]:
@@ -942,7 +756,7 @@ def cli_rerun_event(cli_args=None):
                 raise OSError("Cancelled")
 
     with h5py.File(args.file, "r") as file:
-        system = System.init(file)
+        system = init(file)
         if args.smax is None:
             ret = runinc_event_basic(system, file, args.inc)
         else:
@@ -953,7 +767,7 @@ def cli_rerun_event(cli_args=None):
         file["t"] = ret["t"]
         meta = file.create_group(f"/meta/{config}/{progname}")
         meta.attrs["version"] = version
-        meta.attrs["dependencies"] = dependencies(model)
+        meta.attrs["dependencies"] = System.dependencies(model)
 
 
 def cli_job_rerun_multislip(cli_args=None):
@@ -1180,6 +994,7 @@ def cli_plot(cli_args=None):
     parser = argparse.ArgumentParser(formatter_class=MyFmt, description=replace_entry_point(doc))
 
     parser.add_argument("-f", "--force", action="store_true", help="Force overwrite")
+    parser.add_argument("-m", "--marker", type=str, help="Set marker")
     parser.add_argument("-o", "--output", type=str, help="Output file")
     parser.add_argument("-v", "--version", action="version", version=version)
     parser.add_argument("file", type=str, help="File to read")
@@ -1198,11 +1013,15 @@ def cli_plot(cli_args=None):
                     raise OSError("Cancelled")
 
     with h5py.File(args.file, "r") as file:
-        system = System.init(file)
+        system = init(file)
         out = basic_output(system, file, verbose=False)
 
+    opts = {}
+    if args.marker:
+        opts["marker"] = args.marker
+
     fig, ax = plt.subplots()
-    ax.plot(out["epsd"], out["sigd"])
+    ax.plot(out["epsd"], out["sigd"], **opts)
 
     if args.output:
         fig.savefig(args.output)
@@ -1292,7 +1111,7 @@ def cli_ensembleinfo(cli_args=None):
 
             # (re)initialise system
             if i == 0:
-                system = System.init(file)
+                system = init(file)
             else:
                 system.reset_epsy(System.read_epsy(file))
 
@@ -1322,7 +1141,7 @@ def cli_ensembleinfo(cli_args=None):
         output["full"].attrs["seeds"] = seeds
         meta = output.create_group(f"/meta/{config}/{progname}")
         meta.attrs["version"] = version
-        meta.attrs["dependencies"] = dependencies(model)
+        meta.attrs["dependencies"] = System.dependencies(model)
 
 
 def view_paraview(
@@ -1432,7 +1251,7 @@ def cli_view_paraview(cli_args=None):
         with h5py.File(filepath, "r") as file:
 
             if i == 0:
-                system = System.init(file)
+                system = init(file)
             else:
                 system.reset_epsy(System.read_epsy(file))
 
