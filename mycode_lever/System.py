@@ -687,7 +687,7 @@ def run(config: str, progname: str, model, init_function, filepath: str, dev: bo
         # check version compatibility
 
         assert dev or not tag.has_uncommited(version)
-        assert dev or not tag.any_has_uncommited(dependencies(model))
+        assert dev or not tag.any_has_uncommitted(dependencies(model))
 
         if f"/meta/{config}/{progname}" not in file:
             meta = file.create_group(f"/meta/{config}/{progname}")
