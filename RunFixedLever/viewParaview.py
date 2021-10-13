@@ -103,9 +103,7 @@ for file in tqdm.tqdm(args.files):
                     xh.Unstructured(output, "/coor", "/conn", "Quadrilateral"),
                     xh.Attribute(output, f"/disp/{inc:d}", "Node", name="Displacement"),
                     xh.Attribute(output, f"/sigd/{inc:d}", "Cell", name="Stress"),
-                    xh.Attribute(
-                        output, f"/epsp/{inc:d}", "Cell", name="Plastic strain"
-                    ),
+                    xh.Attribute(output, f"/epsp/{inc:d}", "Cell", name="Plastic strain"),
                 )
 
             xh.write(series, outbasename + ".xdmf")

@@ -69,9 +69,7 @@ class MyMesh:
 
         fig, ax = plt.subplots()
 
-        gplt.patch(
-            coor=self.coor(), conn=self.conn(), cindex=np.arange(self.conn().shape[0])
-        )
+        gplt.patch(coor=self.coor(), conn=self.conn(), cindex=np.arange(self.conn().shape[0]))
 
         ax.plot(self.coor()[:, 0], self.coor()[:, 1], marker=".", ls="none")
 
@@ -154,9 +152,7 @@ class LayerElastic(MyMesh):
         self.m_nodesLeftEdge = stitch.nodeset([top_nlft, bot_nlft])
         self.m_nodesRightEdge = stitch.nodeset([top_nrgt, bot_nrgt])
         self.m_nodesBottomEdge = stitch.nodeset(np.arange(0, Nx + 1), 0)
-        self.m_nodesTopEdge = stitch.nodeset(
-            np.arange(conn[weak[0], 0], conn[weak[-1], 1] + 1), 1
-        )
+        self.m_nodesTopEdge = stitch.nodeset(np.arange(conn[weak[0], 0], conn[weak[-1], 1] + 1), 1)
 
         self.check()
         assert np.allclose(
@@ -201,15 +197,11 @@ class TopLayerElastic(MyMesh):
         H = top_coor[top_conn[-1, 2], 0] - top_coor[top_conn[-1, 3], 0]
         Ly = top_coor[top_conn[-1, -1], 1] - top_coor[top_conn[0, 0], 1]
 
-        extra = GooseFEM.Mesh.Quad4.Regular(
-            top_ntop.size - 1, int(np.ceil((Ny * h - Ly) / H)), H
-        )
+        extra = GooseFEM.Mesh.Quad4.Regular(top_ntop.size - 1, int(np.ceil((Ny * h - Ly) / H)), H)
 
         stitch = GooseFEM.Mesh.Vstack()
         stitch.push_back(top_coor, top_conn, [0], top_ntop)
-        stitch.push_back(
-            extra.coor(), extra.conn(), extra.nodesBottomEdge(), extra.nodesTopEdge()
-        )
+        stitch.push_back(extra.coor(), extra.conn(), extra.nodesBottomEdge(), extra.nodesTopEdge())
 
         self.m_coor = stitch.coor()
         self.m_conn = stitch.conn()
@@ -250,14 +242,10 @@ class BottomLayerElastic(MyMesh):
         H = bot_coor[bot_conn[0, 1], 0] - bot_coor[bot_conn[0, 0], 0]
         Ly = bot_coor[bot_conn[-1, -1], 1] - bot_coor[bot_conn[0, 0], 1]
 
-        extra = GooseFEM.Mesh.Quad4.Regular(
-            bot_nbot.size - 1, int(np.ceil((Ny * h - Ly) / H)), H
-        )
+        extra = GooseFEM.Mesh.Quad4.Regular(bot_nbot.size - 1, int(np.ceil((Ny * h - Ly) / H)), H)
 
         stitch = GooseFEM.Mesh.Vstack()
-        stitch.push_back(
-            extra.coor(), extra.conn(), extra.nodesBottomEdge(), extra.nodesTopEdge()
-        )
+        stitch.push_back(extra.coor(), extra.conn(), extra.nodesBottomEdge(), extra.nodesTopEdge())
         stitch.push_back(bot_coor, bot_conn, bot_nbot, [0])
 
         self.m_coor = stitch.coor()
@@ -265,9 +253,7 @@ class BottomLayerElastic(MyMesh):
         self.m_nodesLeftEdge = stitch.nodeset([extra.nodesLeftEdge(), bot_nlft])
         self.m_nodesRightEdge = stitch.nodeset([extra.nodesRightEdge(), bot_nrgt])
         self.m_nodesBottomEdge = stitch.nodeset(extra.nodesBottomEdge(), 0)
-        self.m_nodesTopEdge = stitch.nodeset(
-            np.arange(conn[weak[0], 0], conn[weak[-1], 1] + 1), 1
-        )
+        self.m_nodesTopEdge = stitch.nodeset(np.arange(conn[weak[0], 0], conn[weak[-1], 1] + 1), 1)
 
         self.m_Lx = Nx * h
         self.m_Ly = np.max(self.m_coor[:, 1])
@@ -567,24 +553,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("outdir", type=str)
     parser.add_argument("-N", type=int, default=3 ** 6, help="System size")
-    parser.add_argument(
-        "-n", type=int, default=10, help="Number of systems to generate"
-    )
-    parser.add_argument(
-        "-i", type=int, default=0, help="Simulation index at which to start"
-    )
-    parser.add_argument(
-        "-m", type=int, default=5, help="Maximum number of plastic (minimum == 2)"
-    )
+    parser.add_argument("-n", type=int, default=10, help="Number of systems to generate")
+    parser.add_argument("-i", type=int, default=0, help="Simulation index at which to start")
+    parser.add_argument("-m", type=int, default=5, help="Maximum number of plastic (minimum == 2)")
     parser.add_argument("--seed", type=int, default=0, help="Base seed")
-    parser.add_argument(
-        "--max-plates", type=int, default=100, help="Maximum number of plates"
-    )
+    parser.add_argument("--max-plates", type=int, default=100, help="Maximum number of plates")
     args = parser.parse_args()
 
-    for sid, nplates in itertools.product(
-        range(args.i, args.i + args.n), range(2, args.m + 1)
-    ):
+    for sid, nplates in itertools.product(range(args.i, args.i + args.n), range(2, args.m + 1)):
 
         filename = f"id={sid:03d}_nplates={nplates:d}.h5"
 
