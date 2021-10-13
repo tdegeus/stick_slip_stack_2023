@@ -39,7 +39,7 @@ class MyTests(unittest.TestCase):
             symmetric=True,
         )
 
-        my.FixedLever.cli_generate(["-N", 9, "-n", 1, dirname])
+        my.FixedLever.cli_generate(["--develop", "-N", 9, "-n", 1, dirname])
 
         file_b = os.path.join(dirname, "id=000_nplates=2_kplate=1e-03_symmetric=1.h5")
         self.assertTrue(os.path.isfile(file_b))
@@ -111,7 +111,7 @@ class MyTests(unittest.TestCase):
             delta_gamma=delta_gamma,
         )
 
-        my.FixedLever.cli_run([filename, "-f"])
+        my.FixedLever.cli_run([filename, "--develop"])
         my.FixedLever.cli_ensembleinfo(["-o", infoname, filename])
         my.FixedLever.cli_view_paraview([filename])
         my.FixedLever.cli_rerun_event([filename, "-i", 1, "-o", eventname])
