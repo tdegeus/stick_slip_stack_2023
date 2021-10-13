@@ -19,6 +19,7 @@ dependencies:
 - ninja
 - parallel
 - pre-commit
+- prrng
 - python
 - python-cppcolormap
 - python-frictionqpotfem
