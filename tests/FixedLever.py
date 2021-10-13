@@ -93,8 +93,9 @@ class MyTests(unittest.TestCase):
         dirname = "mytest"
         idname = "id=0.h5"
         filename = os.path.join(dirname, idname)
-        infoname = os.path.join(dirname, "EnsembleInfo.h5")
-        eventname = os.path.join(dirname, "events.h5")
+        checkname = os.path.join(dirname, my.FixedLever.file_defaults["cli_find_completed"])
+        infoname = os.path.join(dirname, my.FixedLever.file_defaults["cli_ensembleinfo"])
+        eventname = os.path.join(dirname, my.FixedLever.file_defaults["cli_rerun_event"])
         delta_gamma = 1e-4 * np.ones(5)
         delta_gamma[0] = 0
 
@@ -112,6 +113,9 @@ class MyTests(unittest.TestCase):
         )
 
         my.FixedLever.cli_run([filename, "--develop"])
+        completed = my.FixedLever.cli_find_completed(["-f", "-o", checkname, filename])
+        self.assertEqual(completed, [filename])
+
         my.FixedLever.cli_ensembleinfo(["-o", infoname, filename])
         my.FixedLever.cli_view_paraview([filename])
         my.FixedLever.cli_rerun_event([filename, "-i", 1, "-o", eventname])
