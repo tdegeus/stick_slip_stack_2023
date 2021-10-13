@@ -1,20 +1,25 @@
+import argparse
+import inspect
+import os
+import re
+import sys
+import textwrap
+from collections import defaultdict
+
+import GooseHDF5 as g5
 import h5py
 import numpy as np
 import prrng
-import argparse
-import inspect
-import textwrap
-import os
-import GooseHDF5 as g5
-from collections import defaultdict
 from numpy.typing import ArrayLike
-from ._version import version
-from . import tag
+
 from . import storage
+from . import tag
+from ._version import version
 
 entry_points = dict(
     cli_compare="System_Compare",
 )
+
 
 def replace_entry_point(doc):
     """
@@ -23,6 +28,7 @@ def replace_entry_point(doc):
     for ep in entry_points:
         doc = doc.replace(fr":py:func:`{ep:s}`", entry_points[ep])
     return doc
+
 
 def dependencies(model) -> list[str]:
     """
@@ -120,7 +126,6 @@ def cli_compare(cli_args=None):
 
     if cli_args is not None:
         return ret
-
 
 
 def get_epsy(initstate, initseq, eps_offset, eps0, k, nchunk):
@@ -329,7 +334,7 @@ def run(config: str, progname: str, model, init_function, filepath: str, dev: bo
             if config == "FixedLever":
                 system.layerTagetUbar_addAffineSimpleShear(dgamma, height)
             else:
-                system.setLeverTarget(height * dgamma) # dgamma == total strain, see above
+                system.setLeverTarget(height * dgamma)  # dgamma == total strain, see above
 
             niter = system.minimise()
             if not system.boundcheck_right(5):

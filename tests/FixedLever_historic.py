@@ -3,7 +3,6 @@ import shutil
 import sys
 import unittest
 
-import GooseHDF5 as g5
 import h5py
 import numpy as np
 
@@ -27,11 +26,13 @@ class MyTests(unittest.TestCase):
         idname = "id=0.h5"
         filename = os.path.join(dirname, idname)
         checkname = os.path.join(dirname, my.FixedLever.file_defaults["cli_find_completed"])
-        delta_gamma = np.concatenate((
-            np.zeros(1, dtype=float),
-            1e-4 * np.ones(4, dtype=float),
-            1e-5 * np.ones(100, dtype=float),
-        ))
+        delta_gamma = np.concatenate(
+            (
+                np.zeros(1, dtype=float),
+                1e-4 * np.ones(4, dtype=float),
+                1e-5 * np.ones(100, dtype=float),
+            )
+        )
 
         if not os.path.isdir(dirname):
             os.makedirs(dirname)

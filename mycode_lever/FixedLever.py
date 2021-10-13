@@ -2,7 +2,6 @@ import argparse
 import inspect
 import itertools
 import os
-import re
 import sys
 import textwrap
 
@@ -13,7 +12,6 @@ import GooseFEM
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-import prrng
 import shelephant
 import tqdm
 import XDMFWrite_h5py as xh
@@ -606,7 +604,14 @@ def cli_run(cli_args=None):
         args = parser.parse_args([str(arg) for arg in cli_args])
 
     assert os.path.isfile(os.path.realpath(args.file))
-    System.run(config=config, progname=entry_points[funcname], model=model, init_function=init, filepath=args.file, dev=args.develop)
+    System.run(
+        config=config,
+        progname=entry_points[funcname],
+        model=model,
+        init_function=init,
+        filepath=args.file,
+        dev=args.develop,
+    )
 
 
 def find_completed(filepaths: list[str]) -> list[str]:
