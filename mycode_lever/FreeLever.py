@@ -1,30 +1,7 @@
-import argparse
-import inspect
-import itertools
-import os
-import re
-import sys
-import textwrap
-
-import click
 import FrictionQPotFEM.UniformMultiLayerLeverDrive2d as model
-import GMatElastoPlasticQPot.Cartesian2d as GMat
-import GooseFEM
 import h5py
-import matplotlib.pyplot as plt
-import numpy as np
-import prrng
-import shelephant
-import tqdm
-import XDMFWrite_h5py as xh
 
-from . import slurm
-from . import storage
 from . import System
-from . import tag
-from ._version import version
-
-plt.style.use(["goose", "goose-latex"])
 
 config = "FreeLever"
 
@@ -34,8 +11,7 @@ entry_points = dict(
     cli_run="FreeLever_Run",
 )
 
-file_defaults = dict(
-)
+file_defaults = dict()
 
 
 def replace_entry_point(doc):
@@ -77,7 +53,10 @@ def cli_run(cli_args=None):
     """
     See :py:func:`System.cli_run`.
     """
-    return System.cli_run(cli_args=cli_args, entry_points=entry_points, config=config, model=model, init_function=init)
+    return System.cli_run(
+        cli_args=cli_args, entry_points=entry_points, config=config, model=model, init_function=init
+    )
+
 
 def basic_output(*args, **kwargs):
     """

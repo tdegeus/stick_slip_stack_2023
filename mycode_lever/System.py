@@ -1,25 +1,26 @@
 import argparse
 import inspect
+import itertools
 import os
 import re
 import sys
 import textwrap
-import itertools
 from collections import defaultdict
 
-import GooseHDF5 as g5
-import GooseFEM
-import tqdm
+import click
 import GMatElastoPlasticQPot.Cartesian2d as GMat
-import matplotlib.pyplot as plt
+import GooseFEM
+import GooseHDF5 as g5
 import h5py
+import matplotlib.pyplot as plt
 import numpy as np
 import prrng
+import tqdm
 from numpy.typing import ArrayLike
 
 from . import mesh
-from . import storage
 from . import slurm
+from . import storage
 from . import tag
 from ._version import version
 
@@ -229,6 +230,7 @@ def steadystate(epsd: ArrayLike, sigd: ArrayLike, **kwargs):
 
     steadystate = max(2, np.argmax(K <= 0.95 * K[1]))
     return steadystate
+
 
 def generate(
     config: str,
@@ -1015,6 +1017,7 @@ def cli_run(cli_args: list[str], entry_points: dict, config: str, model, init_fu
         filepath=args.file,
         dev=args.develop,
     )
+
 
 def cli_plot(cli_args: list[str], init_function):
     """

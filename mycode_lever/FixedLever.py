@@ -1,6 +1,5 @@
 import argparse
 import inspect
-import itertools
 import os
 import sys
 import textwrap
@@ -8,18 +7,14 @@ import textwrap
 import click
 import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
 import GMatElastoPlasticQPot.Cartesian2d as GMat
-import GooseFEM
 import h5py
 import numpy as np
 import shelephant
 import tqdm
 import XDMFWrite_h5py as xh
 
-from . import mesh
 from . import slurm
-from . import storage
 from . import System
-from . import tag
 from ._version import version
 
 config = "FixedLever"
@@ -79,7 +74,9 @@ def cli_run(cli_args=None):
     """
     See :py:func:`System.cli_run`.
     """
-    return System.cli_run(cli_args=cli_args, entry_points=entry_points, config=config, model=model, init_function=init)
+    return System.cli_run(
+        cli_args=cli_args, entry_points=entry_points, config=config, model=model, init_function=init
+    )
 
 
 def find_completed(filepaths: list[str]) -> list[str]:
@@ -354,6 +351,7 @@ def cli_job_rerun_multislip(cli_args=None):
         outdir=args.outdir,
         sbatch={"time": args.time},
     )
+
 
 def basic_output(*args, **kwargs):
     """
