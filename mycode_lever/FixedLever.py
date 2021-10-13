@@ -222,8 +222,24 @@ def generate(
     # epsy = np.cumsum(epsy, axis=1)
 
     if delta_gamma is None:
-        delta_gamma = 0.001 * eps0 * np.ones(10000) / k_drive
-        delta_gamma[0] = 0
+
+        # make the first n increments bigger to transverse the non-steady-state part faster
+        # to estimate n use an historic observations, indicated as "dummy" here
+
+        dummy_k = 1e-3
+        dummy_eps0 = 0.5 * 1e-4
+        dummy_delta = 2.5e-07
+        dummy_prefactor = dummy_delta * dummy_k / dummy_eps0
+        dummy_ss = 100 * 2.5e-07
+
+        delta = 2e-6 * eps0 / k_drive
+        ss = int(dummy_ss / delta * dummy_k / k_drive)
+
+        delta_gamma = np.concatenate((
+            0.0 * np.ones(1),
+            10 * delta * np.ones(int(ss / 10)),
+            delta * np.ones(10000),
+        ))
 
     c = 1.0
     G = 1.0
