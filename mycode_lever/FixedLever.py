@@ -533,6 +533,7 @@ def cli_generate(cli_args=None):
         formatter_class=MyFormatter, description=replace_entry_point(docstring)
     )
 
+    parser.add_argument("--develop", action="store_true", help="Develop mode")
     parser.add_argument("outdir", type=str, help="Output directory")
     parser.add_argument("-N", "--size", type=int, default=2 * (3 ** 6), help="#blocks")
     parser.add_argument("-n", "--nsim", type=int, default=1, help="#simulations")
@@ -571,6 +572,7 @@ def cli_generate(cli_args=None):
 
     args = parser.parse_args(cli_args)
 
+    assert args.develop or not tag.has_uncommited(version)
     assert os.path.isdir(os.path.realpath(args.outdir))
 
     files = []
@@ -658,8 +660,8 @@ def cli_compare(cli_args=None):
         formatter_class=MyFormatter, description=replace_entry_point(docstring)
     )
 
+    parser.add_argument("--develop", action="store_true", help="Develop mode")
     parser.add_argument("-v", "--version", action="version", version=version)
-    parser.add_argument("--develop", action="store_true", help="For testing")
     parser.add_argument("file_a", type=str, help="Simulation file")
     parser.add_argument("file_b", type=str, help="Simulation file")
 
@@ -810,14 +812,14 @@ def cli_run(cli_args=None):
         formatter_class=MyFormatter, description=replace_entry_point(docstring)
     )
 
-    parser.add_argument("-f", "--force", action="store_true", help="Allow uncommitted")
+    parser.add_argument("--develop", action="store_true", help="Develop mode")
     parser.add_argument("-v", "--version", action="version", version=version)
     parser.add_argument("file", type=str, help="Simulation file")
 
     args = parser.parse_args(cli_args)
 
     assert os.path.isfile(os.path.realpath(args.file))
-    run(args.file, dev=args.force)
+    run(args.file, dev=args.develop)
 
 
 def runinc_event_basic(
