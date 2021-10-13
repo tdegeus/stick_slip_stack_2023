@@ -24,7 +24,6 @@ class MyTests(unittest.TestCase):
         dirname = "mytest"
         idname = "id=0.h5"
         filename = os.path.join(dirname, idname)
-        checkname = os.path.join(dirname, my.FixedLever.file_defaults["cli_find_completed"])
         delta_gamma = np.concatenate(
             (
                 np.zeros(1, dtype=float),
@@ -36,7 +35,7 @@ class MyTests(unittest.TestCase):
         if not os.path.isdir(dirname):
             os.makedirs(dirname)
 
-        my.FixedLever.generate(
+        my.FreeLever.generate(
             filename=filename,
             N=9,
             nplates=2,
@@ -46,13 +45,11 @@ class MyTests(unittest.TestCase):
             delta_gamma=delta_gamma,
         )
 
-        my.FixedLever.cli_run([filename, "--develop"])
-        completed = my.FixedLever.cli_find_completed(["-f", "-o", checkname, filename])
-        self.assertEqual(completed, [filename])
+        my.FreeLever.cli_run([filename, "--develop"])
 
         with h5py.File(filename, "r") as file:
-            system = my.FixedLever.init(file)
-            out = my.FixedLever.basic_output(system, file, verbose=False)
+            system = my.FreeLever.init(file)
+            out = my.FreeLever.basic_output(system, file, verbose=False)
 
         with h5py.File(historic, "r") as file:
             self.assertTrue(np.allclose(file["epsd"][...], out["epsd"]))
