@@ -524,9 +524,7 @@ def cli_generate(cli_args=None):
     else:
         cli_args = [str(arg) for arg in cli_args]
 
-    class MyFormatter(
-        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
-    ):
+    class MyFormatter(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
         pass
 
     parser = argparse.ArgumentParser(
@@ -651,9 +649,7 @@ def cli_compare(cli_args=None):
     else:
         cli_args = [str(arg) for arg in cli_args]
 
-    class MyFormatter(
-        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
-    ):
+    class MyFormatter(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
         pass
 
     parser = argparse.ArgumentParser(
@@ -717,8 +713,8 @@ def run(filename: str, dev: bool):
             print("Marked completed, skipping")
             return 1
 
-        assert tag.greater_equal(version, meta.attrs["version"])
-        assert tag.all_greater_equal(dependencies(model), meta.attrs["dependencies"])
+        assert tag.equal(version, meta.attrs["version"])
+        assert tag.all_equal(dependencies(model), meta.attrs["dependencies"])
 
         # restore or initialise the system / output
 
@@ -733,13 +729,14 @@ def run(filename: str, dev: bool):
         else:
 
             inc = int(0)
+            desc = '(end of increment). One entry per item in "/stored".'
 
             storage.dset_extendible1d(
                 file=file,
                 key="/stored",
                 dtype=np.uint64,
                 value=inc,
-                desc="List of stored increments",
+                desc="List of stored increments.",
             )
 
             storage.dset_extendible1d(
@@ -747,22 +744,14 @@ def run(filename: str, dev: bool):
                 key="/t",
                 dtype=np.float64,
                 value=system.t(),
-                desc="Per increment: time at the end of the increment",
+                desc=f"Time {desc}",
             )
 
-            storage.dump_with_atttrs(
-                file=file,
-                key=f"/disp/{inc}",
-                data=system.u(),
-                desc="Displacement (end of increment).",
-            )
+            file[f"/disp/{inc}"] = system.u()
+            file["/disp"].attrs["desc"] = f"Displacement {desc}"
 
-            storage.dump_with_atttrs(
-                file=file,
-                key=f"/drive/ubar/{inc}",
-                data=system.layerTargetUbar(),
-                desc="Loading frame position per layer.",
-            )
+            file[f"/drive/ubar/{inc}"] = system.layerTargetUbar()
+            file["/drive/ubar"].attrs["desc"] = f"Loading frame position per layer {desc}"
 
         # run
 
@@ -787,6 +776,7 @@ def run(filename: str, dev: bool):
 
             inc += 1
 
+        print(f'"{basename}": completed')
         meta.attrs["completed"] = 1
 
 
@@ -803,9 +793,7 @@ def cli_run(cli_args=None):
     else:
         cli_args = [str(arg) for arg in cli_args]
 
-    class MyFormatter(
-        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
-    ):
+    class MyFormatter(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
         pass
 
     parser = argparse.ArgumentParser(
@@ -822,9 +810,7 @@ def cli_run(cli_args=None):
     run(args.file, dev=args.develop)
 
 
-def runinc_event_basic(
-    system: model.System, file: h5py.File, inc: int, Smax=sys.maxsize
-) -> dict:
+def runinc_event_basic(system: model.System, file: h5py.File, inc: int, Smax=sys.maxsize) -> dict:
     """
     Rerun increment and get basic event information.
 
@@ -896,9 +882,7 @@ def cli_rerun_event(cli_args=None):
     else:
         cli_args = [str(arg) for arg in cli_args]
 
-    class MyFormatter(
-        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
-    ):
+    class MyFormatter(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
         pass
 
     parser = argparse.ArgumentParser(
@@ -955,9 +939,7 @@ def cli_job_rerun_multislip(cli_args=None):
     else:
         cli_args = [str(arg) for arg in cli_args]
 
-    class MyFormatter(
-        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
-    ):
+    class MyFormatter(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
         pass
 
     parser = argparse.ArgumentParser(
@@ -1051,9 +1033,7 @@ def cli_job_rerun_multislip(cli_args=None):
 
             for i in incs:
                 s = np.sum(S[i, :])
-                commands += [
-                    f"{executable} -i {i:d} -s {s:d} -o {simid}_inc={i:d}.h5 {relfile}"
-                ]
+                commands += [f"{executable} -i {i:d} -s {s:d} -o {simid}_inc={i:d}.h5 {relfile}"]
 
     slurm.serial_group(
         commands,
@@ -1175,9 +1155,7 @@ def cli_plot(cli_args=None):
     else:
         cli_args = [str(arg) for arg in cli_args]
 
-    class MyFormatter(
-        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
-    ):
+    class MyFormatter(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
         pass
 
     parser = argparse.ArgumentParser(
@@ -1230,9 +1208,7 @@ def cli_ensembleinfo(cli_args=None):
     else:
         cli_args = [str(arg) for arg in cli_args]
 
-    class MyFormatter(
-        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
-    ):
+    class MyFormatter(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
         pass
 
     parser = argparse.ArgumentParser(
@@ -1398,9 +1374,7 @@ def cli_view_paraview(cli_args=None):
     else:
         cli_args = [str(arg) for arg in cli_args]
 
-    class MyFormatter(
-        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
-    ):
+    class MyFormatter(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
         pass
 
     parser = argparse.ArgumentParser(
