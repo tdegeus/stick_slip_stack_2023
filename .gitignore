@@ -1,6 +1,5 @@
 _version.py
 build
-*.h5
 *.pdf
 shelephant_*
 

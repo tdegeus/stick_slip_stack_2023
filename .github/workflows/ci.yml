@@ -43,6 +43,8 @@ jobs:
 
     - name: Run tests
       run: |
-        python tests/slurm.py
         python tests/FixedLever.py
+        python tests/FixedLever_historic.py
+        python tests/FreeLever_historic.py
+        python tests/slurm.py
         python tests/tag.py

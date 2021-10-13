@@ -1,4 +1,5 @@
 from . import FixedLever
+from . import FreeLever
 from . import slurm
 from . import System
 from . import tag

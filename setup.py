@@ -21,8 +21,10 @@ def read_entry_points(module):
 
 
 entry_points = []
-entry_points += read_entry_points("slurm")
 entry_points += read_entry_points("FixedLever")
+entry_points += read_entry_points("FreeLever")
+entry_points += read_entry_points("slurm")
+entry_points += read_entry_points("System")
 
 
 setup(
