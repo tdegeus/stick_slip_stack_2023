@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import textwrap
+from collections import defaultdict
 
 import click
 import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
@@ -12,16 +13,11 @@ import GMatElastoPlasticQPot.Cartesian2d as GMat
 import GooseFEM
 import GooseHDF5 as g5
 import h5py
+import matplotlib.pyplot as plt
 import numpy as np
 import prrng
 import tqdm
 import XDMFWrite_h5py as xh
-import matplotlib.pyplot as plt
-import GooseMPL as gplt
-
-from collections import defaultdict
-
-plt.style.use(["goose", "goose-latex"])
 
 from . import mesh
 from . import slurm
@@ -29,6 +25,8 @@ from . import storage
 from . import System
 from . import tag
 from ._version import version
+
+plt.style.use(["goose", "goose-latex"])
 
 config = "FixedLever"
 
@@ -229,17 +227,19 @@ def generate(
         dummy_k = 1e-3
         dummy_eps0 = 0.5 * 1e-4
         dummy_delta = 2.5e-07
-        dummy_prefactor = dummy_delta * dummy_k / dummy_eps0
+        dummy_delta * dummy_k / dummy_eps0
         dummy_ss = 100 * 2.5e-07
 
         delta = 2e-6 * eps0 / k_drive
         ss = int(dummy_ss / delta * dummy_k / k_drive)
 
-        delta_gamma = np.concatenate((
-            0.0 * np.ones(1),
-            10 * delta * np.ones(int(ss / 10)),
-            delta * np.ones(10000),
-        ))
+        delta_gamma = np.concatenate(
+            (
+                0.0 * np.ones(1),
+                10 * delta * np.ones(int(ss / 10)),
+                delta * np.ones(10000),
+            )
+        )
 
     c = 1.0
     G = 1.0
@@ -1189,7 +1189,6 @@ def cli_plot(cli_args=None):
 
     funcname = inspect.getframeinfo(inspect.currentframe()).function
     docstring = textwrap.dedent(inspect.getdoc(globals()[funcname]))
-    progname = entry_points[funcname]
 
     if cli_args is None:
         cli_args = sys.argv[1:]
