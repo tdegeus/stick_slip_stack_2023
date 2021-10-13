@@ -60,9 +60,7 @@ def snippet_load_conda(condabase: str = default_condabase):
     """
 
     ret = ["# Activate hardware optimised environment (or fallback environment)"]
-    ret += [
-        f'conda_activate_first_existing "{condabase}$(get_simd_envname)" "{condabase}"'
-    ]
+    ret += [f'conda_activate_first_existing "{condabase}$(get_simd_envname)" "{condabase}"']
     ret += []
 
     return "\n".join(ret)
@@ -247,9 +245,7 @@ def cli_serial_group(cli_args=None):
     else:
         cli_args = [str(arg) for arg in cli_args]
 
-    class MyFormatter(
-        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
-    ):
+    class MyFormatter(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
         pass
 
     parser = argparse.ArgumentParser(
@@ -291,9 +287,7 @@ def cli_serial(cli_args=None):
     else:
         cli_args = [str(arg) for arg in cli_args]
 
-    class MyFormatter(
-        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
-    ):
+    class MyFormatter(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
         pass
 
     parser = argparse.ArgumentParser(
@@ -301,9 +295,7 @@ def cli_serial(cli_args=None):
     )
 
     parser.add_argument("-o", "--outdir", type=str, default=".", help="Output dir")
-    parser.add_argument(
-        "-n", "--name", type=str, help="Job name (default: from command)"
-    )
+    parser.add_argument("-n", "--name", type=str, help="Job name (default: from command)")
     parser.add_argument("-w", "--time", type=str, default="24h", help="Walltime")
     parser.add_argument("-v", "--version", action="version", version=version)
     parser.add_argument("command", type=str, help="The command")

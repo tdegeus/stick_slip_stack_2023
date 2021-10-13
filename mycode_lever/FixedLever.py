@@ -16,6 +16,7 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import prrng
+import shelephant
 import tqdm
 import XDMFWrite_h5py as xh
 
@@ -31,18 +32,20 @@ plt.style.use(["goose", "goose-latex"])
 config = "FixedLever"
 
 entry_points = dict(
-    cli_run="FixedLever_Run",
-    cli_generate="FixedLever_Generate",
     cli_compare="FixedLever_Compare",
-    cli_plot="FixedLever_Plot",
     cli_ensembleinfo="FixedLever_EnsembleInfo",
-    cli_view_paraview="FixedLever_Paraview",
-    cli_rerun_event="FixedLever_Events",
+    cli_find_completed="FixedLever_FindCompleted",
+    cli_generate="FixedLever_Generate",
     cli_job_rerun_multislip="FixedLever_EventsJob",
+    cli_plot="FixedLever_Plot",
+    cli_rerun_event="FixedLever_Events",
+    cli_run="FixedLever_Run",
+    cli_view_paraview="FixedLever_Paraview",
 )
 
 file_defaults = dict(
     cli_ensembleinfo="EnsembleInfo.h5",
+    cli_find_completed="FixedLever_Completed.yaml",
     cli_rerun_event="FixedLever_Events.h5",
 )
 
@@ -55,13 +58,13 @@ def dependencies(system: model.System) -> list[str]:
     return sorted(list(model.version_dependencies()) + ["prrng=" + prrng.version()])
 
 
-def replace_entry_point(docstring):
+def replace_entry_point(doc):
     """
     Replace ":py:func:`...`" with the relevant entry_point name
     """
     for ep in entry_points:
-        docstring = docstring.replace(fr":py:func:`{ep:s}`", entry_points[ep])
-    return docstring
+        doc = doc.replace(fr":py:func:`{ep:s}`", entry_points[ep])
+    return doc
 
 
 def interpret_filename(filename):
@@ -516,30 +519,20 @@ def cli_generate(cli_args=None):
     Generate IO files, including job-scripts to run simulations.
     """
 
-    funcname = inspect.getframeinfo(inspect.currentframe()).function
-    docstring = textwrap.dedent(inspect.getdoc(globals()[funcname]))
-
-    if cli_args is None:
-        cli_args = sys.argv[1:]
-    else:
-        cli_args = [str(arg) for arg in cli_args]
-
-    class MyFormatter(
-        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
-    ):
+    class MyFmt(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
         pass
 
-    parser = argparse.ArgumentParser(
-        formatter_class=MyFormatter, description=replace_entry_point(docstring)
-    )
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    doc = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+    parser = argparse.ArgumentParser(formatter_class=MyFmt, description=replace_entry_point(doc))
 
-    parser.add_argument("--develop", action="store_true", help="Develop mode")
-    parser.add_argument("outdir", type=str, help="Output directory")
-    parser.add_argument("-N", "--size", type=int, default=2 * (3 ** 6), help="#blocks")
+    parser.add_argument("--develop", action="store_true", help="Allow uncommitted changes")
     parser.add_argument("-n", "--nsim", type=int, default=1, help="#simulations")
+    parser.add_argument("-N", "--size", type=int, default=2 * (3 ** 6), help="#blocks")
     parser.add_argument("-s", "--start", type=int, default=0, help="Start simulation")
-    parser.add_argument("-w", "--time", type=str, default="72h", help="Walltime")
     parser.add_argument("-v", "--version", action="version", version=version)
+    parser.add_argument("-w", "--time", type=str, default="72h", help="Walltime")
+    parser.add_argument("outdir", type=str, help="Output directory")
 
     parser.add_argument(
         "-l",
@@ -570,7 +563,10 @@ def cli_generate(cli_args=None):
         help="Set the symmetry of the drive spring (True/False)",
     )
 
-    args = parser.parse_args(cli_args)
+    if cli_args is None:
+        args = parser.parse_args(sys.argv[1:])
+    else:
+        args = parser.parse_args([str(arg) for arg in cli_args])
 
     assert args.develop or not tag.has_uncommited(version)
     assert os.path.isdir(os.path.realpath(args.outdir))
@@ -643,29 +639,21 @@ def cli_compare(cli_args=None):
     Compare input files.
     """
 
-    funcname = inspect.getframeinfo(inspect.currentframe()).function
-    docstring = textwrap.dedent(inspect.getdoc(globals()[funcname]))
-
-    if cli_args is None:
-        cli_args = sys.argv[1:]
-    else:
-        cli_args = [str(arg) for arg in cli_args]
-
-    class MyFormatter(
-        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
-    ):
+    class MyFmt(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
         pass
 
-    parser = argparse.ArgumentParser(
-        formatter_class=MyFormatter, description=replace_entry_point(docstring)
-    )
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    doc = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+    parser = argparse.ArgumentParser(formatter_class=MyFmt, description=replace_entry_point(doc))
 
-    parser.add_argument("--develop", action="store_true", help="Develop mode")
     parser.add_argument("-v", "--version", action="version", version=version)
     parser.add_argument("file_a", type=str, help="Simulation file")
     parser.add_argument("file_b", type=str, help="Simulation file")
 
-    args = parser.parse_args(cli_args)
+    if cli_args is None:
+        args = parser.parse_args(sys.argv[1:])
+    else:
+        args = parser.parse_args([str(arg) for arg in cli_args])
 
     assert os.path.isfile(os.path.realpath(args.file_a))
     assert os.path.isfile(os.path.realpath(args.file_b))
@@ -680,10 +668,8 @@ def cli_compare(cli_args=None):
         for path in ret[key]:
             print(key, path)
 
-    if args.develop:
+    if cli_args is not None:
         return ret
-    else:
-        return 0
 
 
 def run(filename: str, dev: bool):
@@ -717,8 +703,8 @@ def run(filename: str, dev: bool):
             print("Marked completed, skipping")
             return 1
 
-        assert tag.greater_equal(version, meta.attrs["version"])
-        assert tag.all_greater_equal(dependencies(model), meta.attrs["dependencies"])
+        assert tag.equal(version, meta.attrs["version"])
+        assert tag.all_equal(dependencies(model), meta.attrs["dependencies"])
 
         # restore or initialise the system / output
 
@@ -733,13 +719,14 @@ def run(filename: str, dev: bool):
         else:
 
             inc = int(0)
+            desc = '(end of increment). One entry per item in "/stored".'
 
             storage.dset_extendible1d(
                 file=file,
                 key="/stored",
                 dtype=np.uint64,
                 value=inc,
-                desc="List of stored increments",
+                desc="List of stored increments.",
             )
 
             storage.dset_extendible1d(
@@ -747,22 +734,14 @@ def run(filename: str, dev: bool):
                 key="/t",
                 dtype=np.float64,
                 value=system.t(),
-                desc="Per increment: time at the end of the increment",
+                desc=f"Time {desc}",
             )
 
-            storage.dump_with_atttrs(
-                file=file,
-                key=f"/disp/{inc}",
-                data=system.u(),
-                desc="Displacement (end of increment).",
-            )
+            file[f"/disp/{inc}"] = system.u()
+            file["/disp"].attrs["desc"] = f"Displacement {desc}"
 
-            storage.dump_with_atttrs(
-                file=file,
-                key=f"/drive/ubar/{inc}",
-                data=system.layerTargetUbar(),
-                desc="Loading frame position per layer.",
-            )
+            file[f"/drive/ubar/{inc}"] = system.layerTargetUbar()
+            file["/drive/ubar"].attrs["desc"] = f"Loading frame position per layer {desc}"
 
         # run
 
@@ -787,6 +766,7 @@ def run(filename: str, dev: bool):
 
             inc += 1
 
+        print(f'"{basename}": completed')
         meta.attrs["completed"] = 1
 
 
@@ -795,36 +775,77 @@ def cli_run(cli_args=None):
     Run simulation.
     """
 
-    funcname = inspect.getframeinfo(inspect.currentframe()).function
-    docstring = textwrap.dedent(inspect.getdoc(globals()[funcname]))
-
-    if cli_args is None:
-        cli_args = sys.argv[1:]
-    else:
-        cli_args = [str(arg) for arg in cli_args]
-
-    class MyFormatter(
-        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
-    ):
+    class MyFmt(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
         pass
 
-    parser = argparse.ArgumentParser(
-        formatter_class=MyFormatter, description=replace_entry_point(docstring)
-    )
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    doc = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+    parser = argparse.ArgumentParser(formatter_class=MyFmt, description=replace_entry_point(doc))
 
-    parser.add_argument("--develop", action="store_true", help="Develop mode")
+    parser.add_argument("--develop", action="store_true", help="Allow uncommitted changes")
     parser.add_argument("-v", "--version", action="version", version=version)
     parser.add_argument("file", type=str, help="Simulation file")
 
-    args = parser.parse_args(cli_args)
+    if cli_args is None:
+        args = parser.parse_args(sys.argv[1:])
+    else:
+        args = parser.parse_args([str(arg) for arg in cli_args])
 
     assert os.path.isfile(os.path.realpath(args.file))
     run(args.file, dev=args.develop)
 
 
-def runinc_event_basic(
-    system: model.System, file: h5py.File, inc: int, Smax=sys.maxsize
-) -> dict:
+def find_completed(filepaths: list[str]) -> list[str]:
+    """
+    List simulations marked completed.
+
+    :param filepaths: List of files.
+    :return: Those entries in ``filepaths`` that correspond to completed files.
+    """
+
+    progname = entry_points["cli_run"]
+    completed = []
+
+    for filepath in filepaths:
+        with h5py.File(filepath, "r") as file:
+            if "completed" in file[f"/meta/{config}/{progname}"].attrs:
+                completed.append(filepath)
+
+    return completed
+
+
+def cli_find_completed(cli_args=None):
+    """
+    List simulations marked completed.
+    """
+
+    class MyFmt(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
+        pass
+
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    doc = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+    parser = argparse.ArgumentParser(formatter_class=MyFmt, description=replace_entry_point(doc))
+
+    parser.add_argument("-f", "--force", action="store_true", help="Force overwrite")
+    parser.add_argument("-o", "--output", default=file_defaults[funcname], help="Output file")
+    parser.add_argument("-v", "--version", action="version", version=version)
+    parser.add_argument("files", type=str, nargs="*", help="Simulation files")
+
+    if cli_args is None:
+        args = parser.parse_args(sys.argv[1:])
+    else:
+        args = parser.parse_args([str(arg) for arg in cli_args])
+
+    assert np.all([os.path.isfile(os.path.realpath(file)) for file in args.files])
+
+    completed = find_completed(args.files)
+    shelephant.yaml.dump(args.output, completed, force=args.force)
+
+    if cli_args is not None:
+        return completed
+
+
+def runinc_event_basic(system: model.System, file: h5py.File, inc: int, Smax=sys.maxsize) -> dict:
     """
     Rerun increment and get basic event information.
 
@@ -886,24 +907,14 @@ def cli_rerun_event(cli_args=None):
     Rerun increments and store basic event info.
     """
 
-    funcname = inspect.getframeinfo(inspect.currentframe()).function
-    docstring = textwrap.dedent(inspect.getdoc(globals()[funcname]))
-    progname = entry_points[funcname]
-    output = file_defaults[funcname]
-
-    if cli_args is None:
-        cli_args = sys.argv[1:]
-    else:
-        cli_args = [str(arg) for arg in cli_args]
-
-    class MyFormatter(
-        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
-    ):
+    class MyFmt(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
         pass
 
-    parser = argparse.ArgumentParser(
-        formatter_class=MyFormatter, description=replace_entry_point(docstring)
-    )
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    doc = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+    parser = argparse.ArgumentParser(formatter_class=MyFmt, description=replace_entry_point(doc))
+    progname = entry_points[funcname]
+    output = file_defaults[funcname]
 
     parser.add_argument(
         "-s",
@@ -912,13 +923,16 @@ def cli_rerun_event(cli_args=None):
         help="Truncate at a given maximal total S",
     )
 
-    parser.add_argument("-o", "--output", type=str, default=output, help="Output file")
+    parser.add_argument("-f", "--force", action="store_true", help="Force overwrite")
     parser.add_argument("-i", "--inc", required=True, type=int, help="Increment number")
-    parser.add_argument("-f", "--force", action="store_true", help="Allow uncommitted")
+    parser.add_argument("-o", "--output", type=str, default=output, help="Output file")
     parser.add_argument("-v", "--version", action="version", version=version)
     parser.add_argument("file", type=str, help="Simulation file")
 
-    args = parser.parse_args(cli_args)
+    if cli_args is None:
+        args = parser.parse_args(sys.argv[1:])
+    else:
+        args = parser.parse_args([str(arg) for arg in cli_args])
 
     assert os.path.isfile(os.path.realpath(args.file))
 
@@ -947,22 +961,12 @@ def cli_job_rerun_multislip(cli_args=None):
     Rerun increments that have events in which more than one layer slips.
     """
 
-    funcname = inspect.getframeinfo(inspect.currentframe()).function
-    docstring = textwrap.dedent(inspect.getdoc(globals()[funcname]))
-
-    if cli_args is None:
-        cli_args = sys.argv[1:]
-    else:
-        cli_args = [str(arg) for arg in cli_args]
-
-    class MyFormatter(
-        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
-    ):
+    class MyFmt(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
         pass
 
-    parser = argparse.ArgumentParser(
-        formatter_class=MyFormatter, description=replace_entry_point(docstring)
-    )
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    doc = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+    parser = argparse.ArgumentParser(formatter_class=MyFmt, description=replace_entry_point(doc))
 
     parser.add_argument("info", type=str, help="EnsembleInfo (read-only)")
 
@@ -1021,7 +1025,10 @@ def cli_job_rerun_multislip(cli_args=None):
         version=version,
     )
 
-    args = parser.parse_args(cli_args)
+    if cli_args is None:
+        args = parser.parse_args(sys.argv[1:])
+    else:
+        args = parser.parse_args([str(arg) for arg in cli_args])
 
     assert os.path.isfile(os.path.realpath(args.info))
     assert os.path.isdir(os.path.realpath(args.outdir))
@@ -1051,9 +1058,7 @@ def cli_job_rerun_multislip(cli_args=None):
 
             for i in incs:
                 s = np.sum(S[i, :])
-                commands += [
-                    f"{executable} -i {i:d} -s {s:d} -o {simid}_inc={i:d}.h5 {relfile}"
-                ]
+                commands += [f"{executable} -i {i:d} -s {s:d} -o {simid}_inc={i:d}.h5 {relfile}"]
 
     slurm.serial_group(
         commands,
@@ -1167,29 +1172,22 @@ def cli_plot(cli_args=None):
     Plot basic output.
     """
 
-    funcname = inspect.getframeinfo(inspect.currentframe()).function
-    docstring = textwrap.dedent(inspect.getdoc(globals()[funcname]))
-
-    if cli_args is None:
-        cli_args = sys.argv[1:]
-    else:
-        cli_args = [str(arg) for arg in cli_args]
-
-    class MyFormatter(
-        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
-    ):
+    class MyFmt(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
         pass
 
-    parser = argparse.ArgumentParser(
-        formatter_class=MyFormatter, description=replace_entry_point(docstring)
-    )
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    doc = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+    parser = argparse.ArgumentParser(formatter_class=MyFmt, description=replace_entry_point(doc))
 
-    parser.add_argument("-o", "--output", type=str, help="Output file")
     parser.add_argument("-f", "--force", action="store_true", help="Force overwrite")
+    parser.add_argument("-o", "--output", type=str, help="Output file")
     parser.add_argument("-v", "--version", action="version", version=version)
     parser.add_argument("file", type=str, help="File to read")
 
-    args = parser.parse_args(cli_args)
+    if cli_args is None:
+        args = parser.parse_args(sys.argv[1:])
+    else:
+        args = parser.parse_args([str(arg) for arg in cli_args])
 
     assert os.path.isfile(os.path.realpath(args.file))
 
@@ -1220,31 +1218,24 @@ def cli_ensembleinfo(cli_args=None):
     a single output file.
     """
 
+    class MyFmt(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
+        pass
+
     funcname = inspect.getframeinfo(inspect.currentframe()).function
-    docstring = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+    doc = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+    parser = argparse.ArgumentParser(formatter_class=MyFmt, description=replace_entry_point(doc))
     progname = entry_points[funcname]
     output = file_defaults[funcname]
 
-    if cli_args is None:
-        cli_args = sys.argv[1:]
-    else:
-        cli_args = [str(arg) for arg in cli_args]
-
-    class MyFormatter(
-        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
-    ):
-        pass
-
-    parser = argparse.ArgumentParser(
-        formatter_class=MyFormatter, description=replace_entry_point(docstring)
-    )
-
-    parser.add_argument("-o", "--output", type=str, default=output, help="Output file")
     parser.add_argument("-f", "--force", action="store_true", help="Force overwrite")
+    parser.add_argument("-o", "--output", type=str, default=output, help="Output file")
     parser.add_argument("-v", "--version", action="version", version=version)
     parser.add_argument("files", nargs="*", type=str, help="Files to read")
 
-    args = parser.parse_args(cli_args)
+    if cli_args is None:
+        args = parser.parse_args(sys.argv[1:])
+    else:
+        args = parser.parse_args([str(arg) for arg in cli_args])
 
     assert len(args.files) > 0
     assert np.all([os.path.isfile(os.path.realpath(file)) for file in args.files])
@@ -1390,22 +1381,12 @@ def cli_view_paraview(cli_args=None):
     Create files to view with ParaView.
     """
 
-    funcname = inspect.getframeinfo(inspect.currentframe()).function
-    docstring = textwrap.dedent(inspect.getdoc(globals()[funcname]))
-
-    if cli_args is None:
-        cli_args = sys.argv[1:]
-    else:
-        cli_args = [str(arg) for arg in cli_args]
-
-    class MyFormatter(
-        argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter
-    ):
+    class MyFmt(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
         pass
 
-    parser = argparse.ArgumentParser(
-        formatter_class=MyFormatter, description=replace_entry_point(docstring)
-    )
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    doc = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+    parser = argparse.ArgumentParser(formatter_class=MyFmt, description=replace_entry_point(doc))
 
     parser.add_argument(
         "-p",
@@ -1419,7 +1400,10 @@ def cli_view_paraview(cli_args=None):
     parser.add_argument("-v", "--version", action="version", version=version)
     parser.add_argument("files", nargs="*", type=str, help="Files to read")
 
-    args = parser.parse_args(cli_args)
+    if cli_args is None:
+        args = parser.parse_args(sys.argv[1:])
+    else:
+        args = parser.parse_args([str(arg) for arg in cli_args])
 
     assert len(args.files) > 0
     assert np.all([os.path.isfile(os.path.realpath(file)) for file in args.files])

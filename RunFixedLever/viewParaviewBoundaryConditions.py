@@ -55,9 +55,7 @@ for file in tqdm.tqdm(args.files):
                 data["/layers/is_plastic"][...],
             )
 
-            system.setDriveStiffness(
-                data["/drive/k"][...], data["/drive/symmetric"][...]
-            )
+            system.setDriveStiffness(data["/drive/k"][...], data["/drive/symmetric"][...])
             system.setMassMatrix(data["/rho"][...])
             system.setDampingMatrix(data["/damping/alpha"][...])
 
