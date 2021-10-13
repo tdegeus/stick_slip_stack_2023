@@ -1124,8 +1124,6 @@ def basic_output(
     ret["layers_ux"] = np.zeros((ninc, nlayer), dtype=float)
     ret["layers_tx"] = np.zeros((ninc, nlayer), dtype=float)
 
-    maxinc = None
-
     for inc in tqdm.tqdm(incs, disable=not verbose):
 
         ubar = file[f"/drive/ubar/{inc:d}"][...]
@@ -1143,10 +1141,6 @@ def basic_output(
         Eps = system.Eps() / ret["eps0"]
         idx = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, ret["N"])
 
-        if not system.boundcheck_right(5):
-            maxinc = inc
-            break
-
         for i in range(nlayer):
             e = system.layerElements(i)
             E = np.average(Eps[e, ...], weights=dV[e, ...], axis=(0, 1))
@@ -1160,22 +1154,6 @@ def basic_output(
         ret["sigd"][inc] = GMat.Sigd(np.average(Sig, weights=dV, axis=(0, 1)))
 
         idx_n = np.array(idx, copy=True)
-
-    if maxinc:
-        trucate = [
-            "epsd",
-            "sigd",
-            "epsd_layers",
-            "sigd_layers",
-            "S_layers",
-            "A_layers",
-            "drive_ux",
-            "drive_fx",
-            "layers_ux",
-            "layers_tx",
-        ]
-        for key in trucate:
-            ret[key] = ret[key][:maxinc, ...]
 
     ret["steadystate"] = System.steadystate(**ret)
 
