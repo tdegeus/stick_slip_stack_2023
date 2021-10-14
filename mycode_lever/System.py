@@ -72,34 +72,6 @@ def interpret_filename(filename):
     return info
 
 
-def compare(a: h5py.File, b: h5py.File):
-    """
-    Compare two file: will be replaced by :py:func:`GooseHDF5.compare`.
-    """
-
-    paths_a = list(g5.getdatasets(a, fold=["/disp", "/drive/ubar"]))
-    paths_b = list(g5.getdatasets(b, fold=["/disp", "/drive/ubar"]))
-    paths_a = [p for p in paths_a if p[-3:] != "..."]
-    paths_b = [p for p in paths_b if p[-3:] != "..."]
-    ret = defaultdict(list)
-
-    not_in_b = [str(i) for i in np.setdiff1d(paths_a, paths_b)]
-    not_in_a = [str(i) for i in np.setdiff1d(paths_b, paths_a)]
-    inboth = [str(i) for i in np.intersect1d(paths_a, paths_b)]
-
-    for path in not_in_a:
-        ret["<-"].append(path)
-
-    for path in not_in_b:
-        ret["->"].append(path)
-
-    for path in inboth:
-        if not g5.equal(a, b, path):
-            ret["!="].append(path)
-
-    return ret
-
-
 def cli_compare(cli_args=None):
     """
     Compare input files.
@@ -113,6 +85,7 @@ def cli_compare(cli_args=None):
     parser = argparse.ArgumentParser(formatter_class=MyFmt, description=replace_entry_point(doc))
 
     parser.add_argument("-v", "--version", action="version", version=version)
+    parser.add_argument("-d", "--datasets", action="store_true", help="Don't compare attributes.")
     parser.add_argument("file_a", type=str, help="Simulation file")
     parser.add_argument("file_b", type=str, help="Simulation file")
 
@@ -126,7 +99,11 @@ def cli_compare(cli_args=None):
 
     with h5py.File(args.file_a, "r") as a:
         with h5py.File(args.file_b, "r") as b:
-            ret = compare(a, b)
+            paths_a = list(g5.getdatasets(a, fold=["/disp", "/drive/ubar"]))
+            paths_b = list(g5.getdatasets(b, fold=["/disp", "/drive/ubar"]))
+            paths_a = [p for p in paths_a if p[-3:] != "..."]
+            paths_b = [p for p in paths_b if p[-3:] != "..."]
+            ret = g5.compare(a, b, paths_a, paths_b, attrs=not args.datasets)
 
     for key in ret:
         if key in ["=="]:
@@ -376,12 +353,12 @@ def generate(
         # to estimate n use an historic (version < 4.4.dev30+g1ccc1d3) observations in ``ss``
 
         delta = 2e-3 * eps0
-        ss = int(100 * 2.5e-07 / delta)
+        ss = int(150 * 2.5e-07 / delta)
 
         delta_gamma = np.concatenate(
             (
-                0.0 * np.ones(1),
-                10 * delta * np.ones(int(ss / 10)),
+                np.zeros(1),
+                20.0 * delta * np.ones(int(ss / 20)),
                 delta * np.ones(10000),
             )
         )
@@ -662,6 +639,57 @@ def generate(
                 desc="Height of the spring driving the lever",
             )
 
+class SequenceDelta:
+    """
+    Infinite sequence of distances.
+
+    :param base: Finite list of distances, he last distance repeated indefinitely.
+    """
+
+    def __init__(self, base: ArrayLike):
+
+        self.delta = np.array(base)
+        self.total = np.cumsum(self.delta)
+
+    def get_delta(self, i: int) -> float:
+        """
+        Return the ``i``th distance.
+        :param i: Index.
+        :return: Value.
+        """
+
+        if i < self.delta.size:
+            return self.delta[i]
+
+        return self.delta[-1]
+
+    def get_cumsum(self, i: int) -> float:
+        """
+        Return the ``i``th entry if the cumulative sum of distances.
+        :param i: Index.
+        :return: Value.
+        """
+
+        if i < self.total.size:
+            return self.total[i]
+
+        return self.total[-1] + self.delta[-1] * float(i - self.total.size + 1)
+
+    def list_delta(self, n: int) -> ArrayLike:
+        """
+        Return a list of ``n`` deltas.
+        :param n: Length of the list.
+        :return: List.
+        """
+        return np.array([self.get_delta(i) for i in range(int(n))])
+
+    def list_cumsum(self, n: int) -> ArrayLike:
+        """
+        Return a list of ``n`` of the cumulative sum of deltas.
+        :param n: Length of the list.
+        :return: List.
+        """
+        return np.array([self.get_cumsum(i) for i in range(int(n))])
 
 def run(config: str, progname: str, model, init_function, filepath: str, dev: bool):
     """
@@ -905,6 +933,7 @@ def cli_generate(cli_args: list[str], entry_points: dict, config: str):
     parser = argparse.ArgumentParser(formatter_class=MyFmt, description=doc)
 
     parser.add_argument("--develop", action="store_true", help="Allow uncommitted changes")
+    parser.add_argument("-f", "--force", action="store_true", help="Force overwrite")
     parser.add_argument("-n", "--nsim", type=int, default=1, help="#simulations")
     parser.add_argument("-N", "--size", type=int, default=2 * (3 ** 6), help="#blocks")
     parser.add_argument("-s", "--start", type=int, default=0, help="Start simulation")
@@ -963,11 +992,15 @@ def cli_generate(cli_args: list[str], entry_points: dict, config: str):
             ]
         )
         files += [filename]
+        filepath = os.path.join(args.outdir, filename)
+
+        if args.force and os.path.isfile(filepath):
+            os.remove(filepath)
 
         generate(
             config=config,
             progname=entry_points["cli_generate"],
-            filename=os.path.join(args.outdir, filename),
+            filename=filepath,
             N=args.size,
             nplates=nplates,
             seed=i * args.size * (args.max_plates - 1),
