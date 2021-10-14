@@ -261,7 +261,7 @@ def cli_serial_group(cli_args=None):
 
     args = parser.parse_args(cli_args)
 
-    assert np.all([os.path.isfile(os.path.realpath(file)) for file in args.files])
+    assert np.all([os.path.isfile(file) for file in args.files])
 
     files = [os.path.relpath(file, args.outdir) for file in args.files]
     commands = [f"{args.command} {file}" for file in files]

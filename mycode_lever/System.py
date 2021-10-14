@@ -121,8 +121,8 @@ def cli_compare(cli_args=None):
     else:
         args = parser.parse_args([str(arg) for arg in cli_args])
 
-    assert os.path.isfile(os.path.realpath(args.file_a))
-    assert os.path.isfile(os.path.realpath(args.file_b))
+    assert os.path.isfile(args.file_a)
+    assert os.path.isfile(args.file_b)
 
     with h5py.File(args.file_a, "r") as a:
         with h5py.File(args.file_b, "r") as b:
@@ -256,7 +256,7 @@ def generate(
     :param delta_gamma: Loading history (for testing only).
     """
 
-    assert not os.path.isfile(os.path.realpath(filename))
+    assert not os.path.isfile(filename)
 
     M = max(3, int(N / 4))
     h = np.pi
@@ -947,7 +947,7 @@ def cli_generate(cli_args: list[str], entry_points: dict, config: str):
         args = parser.parse_args([str(arg) for arg in cli_args])
 
     assert args.develop or not tag.has_uncommited(version)
-    assert os.path.isdir(os.path.realpath(args.outdir))
+    assert os.path.isdir(args.outdir)
 
     files = []
 
@@ -1007,7 +1007,7 @@ def cli_run(cli_args: list[str], entry_points: dict, config: str, model, init_fu
     else:
         args = parser.parse_args([str(arg) for arg in cli_args])
 
-    assert os.path.isfile(os.path.realpath(args.file))
+    assert os.path.isfile(args.file)
 
     run(
         config=config,
@@ -1042,7 +1042,7 @@ def cli_plot(cli_args: list[str], init_function):
     else:
         args = parser.parse_args([str(arg) for arg in cli_args])
 
-    assert os.path.isfile(os.path.realpath(args.file))
+    assert os.path.isfile(args.file)
 
     if args.output:
         if not args.force:

@@ -120,7 +120,7 @@ def cli_find_completed(cli_args=None):
     else:
         args = parser.parse_args([str(arg) for arg in cli_args])
 
-    assert np.all([os.path.isfile(os.path.realpath(file)) for file in args.files])
+    assert np.all([os.path.isfile(file) for file in args.files])
 
     completed = find_completed(args.files)
     shelephant.yaml.dump(args.output, completed, force=args.force)
@@ -218,7 +218,7 @@ def cli_rerun_event(cli_args=None):
     else:
         args = parser.parse_args([str(arg) for arg in cli_args])
 
-    assert os.path.isfile(os.path.realpath(args.file))
+    assert os.path.isfile(args.file)
 
     if not args.force:
         if os.path.isfile(args.output):
@@ -314,8 +314,8 @@ def cli_job_rerun_multislip(cli_args=None):
     else:
         args = parser.parse_args([str(arg) for arg in cli_args])
 
-    assert os.path.isfile(os.path.realpath(args.info))
-    assert os.path.isdir(os.path.realpath(args.outdir))
+    assert os.path.isfile(args.info)
+    assert os.path.isdir(args.outdir)
 
     basedir = os.path.dirname(args.info)
     executable = args.executable
@@ -393,7 +393,7 @@ def cli_ensembleinfo(cli_args=None):
         args = parser.parse_args([str(arg) for arg in cli_args])
 
     assert len(args.files) > 0
-    assert np.all([os.path.isfile(os.path.realpath(file)) for file in args.files])
+    assert np.all([os.path.isfile(file) for file in args.files])
     files = [os.path.relpath(file, os.path.dirname(args.output)) for file in args.files]
     seeds = []
 
@@ -490,8 +490,8 @@ def view_paraview(
     :param verbose: Print progress.
     """
 
-    assert not os.path.isfile(os.path.realpath(f"{outbasename}.h5"))
-    assert not os.path.isfile(os.path.realpath(f"{outbasename}.xdmf"))
+    assert not os.path.isfile(f"{outbasename}.h5")
+    assert not os.path.isfile(f"{outbasename}.xdmf")
 
     with h5py.File(f"{outbasename}.h5", "w") as output:
 
@@ -559,7 +559,7 @@ def cli_view_paraview(cli_args=None):
         args = parser.parse_args([str(arg) for arg in cli_args])
 
     assert len(args.files) > 0
-    assert np.all([os.path.isfile(os.path.realpath(file)) for file in args.files])
+    assert np.all([os.path.isfile(file) for file in args.files])
 
     if not args.force:
 
