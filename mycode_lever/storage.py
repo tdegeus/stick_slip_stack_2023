@@ -8,16 +8,20 @@ import h5py
 
 def dset_extendible1d(file: h5py.File, key: str, dtype, value: TypeVar("T"), **kwargs):
     """
-    Create extendible 1d dataset and store the first value.
+    Create extendible 1d dataset and store the first n values.
 
     :param file: Opened HDF5 file.
     :param key: Path to the dataset.
     :param dtype: Data-type to use.
-    :param value: Value to write at index 0.
+    :param value: Value to write at the values.
     """
 
-    dset = file.create_dataset(key, (1,), maxshape=(None,), dtype=dtype)
-    dset[0] = value
+    if not hasattr(value, "__len__"):
+        dset = file.create_dataset(key, (1,), maxshape=(None,), dtype=dtype)
+        dset[0] = value
+    else:
+        dset = file.create_dataset(key, (len(value),), maxshape=(None,), dtype=dtype)
+        dset[:] = value
 
     for attr in kwargs:
         file[key].attrs[attr] = kwargs[attr]
