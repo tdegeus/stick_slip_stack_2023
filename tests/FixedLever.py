@@ -5,7 +5,6 @@ import unittest
 
 import GooseHDF5 as g5
 import h5py
-import numpy as np
 
 root = os.path.join(os.path.dirname(__file__), "..")
 if os.path.exists(os.path.join(root, "mycode_lever", "_version.py")):

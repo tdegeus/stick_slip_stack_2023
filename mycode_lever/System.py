@@ -5,7 +5,6 @@ import os
 import re
 import sys
 import textwrap
-from collections import defaultdict
 
 import click
 import GMatElastoPlasticQPot.Cartesian2d as GMat
@@ -729,10 +728,18 @@ def run(config: str, progname: str, model, init_function, filepath: str, dev: bo
         else:
 
             if config == "FixedLever":
-                system.initEventDriven(file["/run/event/delta_ubar"][...], file["/run/event/active"][...], file["/run/event/delta_u"][...])
+                system.initEventDriven(
+                    file["/run/event/delta_ubar"][...],
+                    file["/run/event/active"][...],
+                    file["/run/event/delta_u"][...],
+                )
             else:
-                system.initEventDriven(file["/run/event/delta_lever"][...], file["/run/event/active"][...], file["/run/event/delta_u"][...], file["/run/event/delta_ubar"][...])
-
+                system.initEventDriven(
+                    file["/run/event/delta_lever"][...],
+                    file["/run/event/active"][...],
+                    file["/run/event/delta_u"][...],
+                    file["/run/event/delta_ubar"][...],
+                )
 
         for inc in range(inc + 1, sys.maxsize):
 

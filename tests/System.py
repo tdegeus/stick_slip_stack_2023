@@ -1,10 +1,7 @@
 import os
-import shutil
 import sys
 import unittest
 
-import GooseHDF5 as g5
-import h5py
 import numpy as np
 
 root = os.path.join(os.path.dirname(__file__), "..")
@@ -33,6 +30,7 @@ class MyTests(unittest.TestCase):
 
         self.assertTrue(np.allclose(d.list_delta(delta_inf.size), delta_inf))
         self.assertTrue(np.allclose(d.list_delta(cumsum_inf.size), cumsum_inf))
+
 
 if __name__ == "__main__":
 

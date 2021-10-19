@@ -62,12 +62,16 @@ def generate(**kwargs):
     """
     return System.generate(**kwargs, config=config, progname=entry_points["cli_generate"])
 
+
 def run(**kwargs):
     """
     See :py:func:`System.run`,
     skipping the arguments ``config``, ``progname``, ``model``, and ``init_function``.
     """
-    return System.run(**kwargs, config=config, progname=entry_points["cli_run"], model=model, init_function=init)
+    return System.run(
+        **kwargs, config=config, progname=entry_points["cli_run"], model=model, init_function=init
+    )
+
 
 def basic_output(*args, **kwargs):
     """
@@ -75,6 +79,7 @@ def basic_output(*args, **kwargs):
     skipping the arguments ``config``, ``progname``, ``model``, and ``init_function``.
     """
     return System.basic_output(*args, **kwargs)
+
 
 def cli_generate(cli_args=None):
     """
@@ -364,13 +369,6 @@ def cli_job_rerun_multislip(cli_args=None):
         outdir=args.outdir,
         sbatch={"time": args.time},
     )
-
-
-def basic_output(*args, **kwargs):
-    """
-    See :oy:func:`System.basic_output`.
-    """
-    return System.basic_output(*args, **kwargs)
 
 
 def cli_plot(cli_args=None):
