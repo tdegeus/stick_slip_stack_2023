@@ -1,7 +1,7 @@
 import packaging.version
 
 
-def has_uncommited(ver: str):
+def has_uncommitted(ver: str):
     """
     Check of a version string encoded that there were uncommitted changes.
 
@@ -28,7 +28,7 @@ def any_has_uncommitted(deps: list[str]) -> bool:
     V = {lib.split("=")[0]: lib.split("=")[1] for lib in deps}
 
     for lib in V:
-        if has_uncommited(V[lib]):
+        if has_uncommitted(V[lib]):
             return True
 
     return False

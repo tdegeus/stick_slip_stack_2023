@@ -56,12 +56,25 @@ def init(file: h5py.File) -> model.System:
     return System.init(file, model)
 
 
-def generate(*args, **kwargs):
+def generate(**kwargs):
     """
-    See :py:func:`System.generate`.
+    See :py:func:`System.generate`, skipping the arguments ``config`` and ``progname``.
     """
-    return System.generate(*args, **kwargs, config=config, progname=entry_points["cli_generate"])
+    return System.generate(**kwargs, config=config, progname=entry_points["cli_generate"])
 
+def run(**kwargs):
+    """
+    See :py:func:`System.run`,
+    skipping the arguments ``config``, ``progname``, ``model``, and ``init_function``.
+    """
+    return System.run(**kwargs, config=config, progname=entry_points["cli_run"], model=model, init_function=init)
+
+def basic_output(*args, **kwargs):
+    """
+    See :py:func:`System.basic_output`,
+    skipping the arguments ``config``, ``progname``, ``model``, and ``init_function``.
+    """
+    return System.basic_output(*args, **kwargs)
 
 def cli_generate(cli_args=None):
     """

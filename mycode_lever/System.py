@@ -215,10 +215,9 @@ def generate(
     filename: str,
     N: int,
     nplates: int,
-    seed: int,
-    k_drive: float,
+    seed: int = 0,
+    k_drive: float = 1e-3,
     symmetric: bool = True,
-    delta_gamma: float = None,
 ):
     """
     Generate an input file.
@@ -230,7 +229,6 @@ def generate(
     :param seed: Base seed to use to generate the disorder.
     :param k_drive: Stiffness of the drive string.
     :param symmetric: Set the drive string symmetric.
-    :param delta_gamma: Loading history (for testing only).
     """
 
     assert not os.path.isfile(filename)
@@ -347,22 +345,6 @@ def generate(
     # epsy[right: N, 0] *= init_factor
     # epsy = np.cumsum(epsy, axis=1)
 
-    if delta_gamma is None:
-
-        # make the first n increments bigger to transverse the non-steady-state part faster
-        # to estimate n use an historic (version < 4.4.dev30+g1ccc1d3) observations in ``ss``
-
-        delta = 2e-3 * eps0
-        ss = int(150 * 2.5e-07 / delta)
-
-        delta_gamma = np.concatenate(
-            (
-                np.zeros(1),
-                20.0 * delta * np.ones(int(ss / 20)),
-                delta * np.ones(10000),
-            )
-        )
-
     c = 1.0
     G = 1.0
     K = 4.5 * G  # consistent with PMMA
@@ -405,7 +387,7 @@ def generate(
 
         storage.dump_with_atttrs(
             file,
-            "/run/epsd/kick",
+            "/run/event/deps",
             eps0 * 1e-4,
             desc="Strain kick to apply",
         )
@@ -618,13 +600,6 @@ def generate(
 
         storage.dump_with_atttrs(
             file,
-            "/drive/delta_gamma",
-            delta_gamma,
-            desc="Affine simple shear increment",
-        )
-
-        storage.dump_with_atttrs(
-            file,
             "/drive/height",
             Hi,
             desc="Height of the loading frame of each layer",
@@ -639,57 +614,65 @@ def generate(
                 desc="Height of the spring driving the lever",
             )
 
-class SequenceDelta:
+        desc = '(end of increment). One entry per item in "/stored".'
+        storage.create_extendible(file, "/stored", np.uint64, desc="List of stored increments")
+        storage.create_extendible(file, "/t", np.float64, desc=f"Time {desc}")
+        storage.create_extendible(file, "/kick", bool, desc=f"Kick {desc}")
+
+        storage.dset_extend1d(file, "/stored", 0, 0)
+        storage.dset_extend1d(file, "/t", 0, 0.0)
+        storage.dset_extend1d(file, "/kick", 0, True)
+
+        file["/drive/ubar/0"] = np.zeros(drive.shape, dtype=np.float64)
+        file["/drive/ubar"].attrs["desc"] = f"Loading frame position per layer {desc}"
+
+        file["/disp/0"] = np.zeros_like(coor)
+        file["/disp"].attrs["desc"] = f"Displacement {desc}"
+
+        if config == "FreeLever":
+            d = f"Target position of the lever {desc}"
+            storage.create_extendible(file, "/drive/lever/target", np.float64, desc=d)
+
+            d = f"Actual position of the lever {desc}"
+            storage.create_extendible(file, "/drive/lever/position", np.float64, desc=d)
+
+            storage.dset_extend1d(file, "/drive/lever/target", 0, 0.0)
+            storage.dset_extend1d(file, "/drive/lever/position", 0, 0.0)
+
+
+def create_check_meta(
+    file: h5py.File,
+    path: str,
+    ver: str,
+    deps: str,
+    dev: bool = False,
+) -> h5py.Group:
     """
-    Infinite sequence of distances.
+    Create or read and check meta data. This function asserts that:
+    -   There are no uncommitted changes.
+    -   There are no version changes.
 
-    :param base: Finite list of distances, he last distance repeated indefinitely.
+    :param file: HDF5 archive.
+    :param path: Path in ``file``.
+    :param ver: Version string.
+    :param deps: List of dependencies.
+    :param dev: Allow uncommitted changes.
+    :return: Group to meta-data.
     """
 
-    def __init__(self, base: ArrayLike):
+    assert dev or not tag.has_uncommitted(ver)
+    assert dev or not tag.any_has_uncommitted(deps)
 
-        self.delta = np.array(base)
-        self.total = np.cumsum(self.delta)
+    if path not in file:
+        meta = file.create_group(path)
+        meta.attrs["version"] = ver
+        meta.attrs["dependencies"] = deps
+        return meta
 
-    def get_delta(self, i: int) -> float:
-        """
-        Return the ``i``th distance.
-        :param i: Index.
-        :return: Value.
-        """
+    meta = file[path]
+    assert tag.equal(ver, meta.attrs["version"])
+    assert tag.all_equal(deps, meta.attrs["dependencies"])
 
-        if i < self.delta.size:
-            return self.delta[i]
-
-        return self.delta[-1]
-
-    def get_cumsum(self, i: int) -> float:
-        """
-        Return the ``i``th entry if the cumulative sum of distances.
-        :param i: Index.
-        :return: Value.
-        """
-
-        if i < self.total.size:
-            return self.total[i]
-
-        return self.total[-1] + self.delta[-1] * float(i - self.total.size + 1)
-
-    def list_delta(self, n: int) -> ArrayLike:
-        """
-        Return a list of ``n`` deltas.
-        :param n: Length of the list.
-        :return: List.
-        """
-        return np.array([self.get_delta(i) for i in range(int(n))])
-
-    def list_cumsum(self, n: int) -> ArrayLike:
-        """
-        Return a list of ``n`` of the cumulative sum of deltas.
-        :param n: Length of the list.
-        :return: List.
-        """
-        return np.array([self.get_cumsum(i) for i in range(int(n))])
 
 def run(config: str, progname: str, model, init_function, filepath: str, dev: bool):
     """
@@ -712,106 +695,59 @@ def run(config: str, progname: str, model, init_function, filepath: str, dev: bo
         if config == "FreeLever":
             system.setLeverProperties(file["/drive/H"][...], file["/drive/height"][...])
 
-        # check version compatibility
-
-        assert dev or not tag.has_uncommited(version)
-        assert dev or not tag.any_has_uncommitted(dependencies(model))
-
-        if f"/meta/{config}/{progname}" not in file:
-            meta = file.create_group(f"/meta/{config}/{progname}")
-            meta.attrs["version"] = version
-            meta.attrs["dependencies"] = dependencies(model)
-        else:
-            meta = file[f"/meta/{config}/{progname}"]
+        meta = create_check_meta(file, f"/meta/{progname}", version, dependencies(model), dev)
 
         if "completed" in meta:
             print("Marked completed, skipping")
             return 1
 
-        assert tag.equal(version, meta.attrs["version"])
-        assert tag.all_equal(dependencies(model), meta.attrs["dependencies"])
-
         # restore or initialise the system / output
 
-        if "/stored" in file:
+        deps = file["/run/event/deps"][...]
+        inc = int(file["/stored"][-1])
+        kick = file["/kick"][inc]
+        system.setT(file["/t"][inc])
+        system.setU(file[f"/disp/{inc:d}"][...])
+        system.layerSetTargetUbar(file[f"/drive/ubar/{inc:d}"][...])
+        print(f'"{basename}": Loading, inc = {inc:d}')
 
-            inc = int(file["/stored"][-1])
-            system.setT(file["/t"][inc])
-            system.setU(file[f"/disp/{inc:d}"][...])
-            system.layerSetTargetUbar(file[f"/drive/ubar/{inc:d}"][...])
-            print(f'"{basename}": Loading, inc = {inc:d}')
-
-        else:
-
-            inc = int(0)
-            desc = '(end of increment). One entry per item in "/stored".'
-
-            storage.dset_extendible1d(
-                file=file,
-                key="/stored",
-                dtype=np.uint64,
-                value=inc,
-                desc="List of stored increments.",
-            )
-
-            storage.dset_extendible1d(
-                file=file,
-                key="/t",
-                dtype=np.float64,
-                value=system.t(),
-                desc=f"Time {desc}",
-            )
-
-            file[f"/disp/{inc}"] = system.u()
-            file["/disp"].attrs["desc"] = f"Displacement {desc}"
-
-            file[f"/drive/ubar/{inc}"] = system.layerTargetUbar()
-            file["/drive/ubar"].attrs["desc"] = f"Loading frame position per layer {desc}"
-
-            if config == "FreeLever":
-
-                storage.dset_extendible1d(
-                    file=file,
-                    key="/drive/lever/target",
-                    dtype=float,
-                    value=system.leverTarget(),
-                    desc=f"Target position of the lever {desc}",
-                )
-
-                storage.dset_extendible1d(
-                    file=file,
-                    key="/drive/lever/position",
-                    dtype=float,
-                    value=system.leverPosition(),
-                    desc=f"Actual position of the lever {desc}",
-                )
-
-        # run
-
-        if config == "FixedLever":
-            height = file["/drive/height"][...]
-            delta_gamma = file["/drive/delta_gamma"][...]
-        else:
-            height = file["/drive/H"][...]
-            delta_gamma = np.cumsum(file["/drive/delta_gamma"][...])
-
-        assert np.isclose(delta_gamma[0], 0.0)
-        inc += 1
-
-        for dgamma in delta_gamma[inc:]:
+        if "/run/event/delta_u" not in file:
 
             if config == "FixedLever":
-                system.layerTagetUbar_addAffineSimpleShear(dgamma, height)
+                ubar = system.layerTargetUbar_affineSimpleShear(1.0, file["/drive/height"][...])
+                system.initEventDriven(ubar, file["/drive/drive"][...])
             else:
-                system.setLeverTarget(height * dgamma)  # dgamma == total strain, see above
+                system.initEventDriven(1.0, file["/drive/drive"][...])
+
+            file["/run/event/delta_u"] = system.eventDriven_deltaU()
+            file["/run/event/delta_ubar"] = system.eventDriven_deltaUbar()
+            file["/run/event/active"] = system.eventDriven_targetActive()
+
+            if config == "FreeLever":
+                file["/run/event/delta_lever"] = system.eventDriven_deltaLeverPosition()
+
+        else:
+
+            if config == "FixedLever":
+                system.initEventDriven(file["/run/event/delta_ubar"][...], file["/run/event/active"][...], file["/run/event/delta_u"][...])
+            else:
+                system.initEventDriven(file["/run/event/delta_lever"][...], file["/run/event/active"][...], file["/run/event/delta_u"][...], file["/run/event/delta_ubar"][...])
+
+
+        for inc in range(inc + 1, sys.maxsize):
+
+            kick = not kick
+            system.eventDrivenStep(deps, kick)
 
             niter = system.minimise()
             if not system.boundcheck_right(5):
                 break
+
             print(f'"{basename}": inc = {inc:8d}, niter = {niter:8d}')
 
             storage.dset_extend1d(file, "/stored", inc, inc)
             storage.dset_extend1d(file, "/t", inc, system.t())
+            storage.dset_extend1d(file, "/kick", inc, kick)
             file[f"/disp/{inc:d}"] = system.u()
             file[f"/drive/ubar/{inc:d}"] = system.layerTargetUbar()
 
@@ -975,7 +911,7 @@ def cli_generate(cli_args: list[str], entry_points: dict, config: str):
     else:
         args = parser.parse_args([str(arg) for arg in cli_args])
 
-    assert args.develop or not tag.has_uncommited(version)
+    assert args.develop or not tag.has_uncommitted(version)
     assert os.path.isdir(args.outdir)
 
     files = []
