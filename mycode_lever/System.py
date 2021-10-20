@@ -217,6 +217,7 @@ def generate(
     seed: int = 0,
     k_drive: float = 1e-3,
     symmetric: bool = True,
+    test_mode: bool = False,
 ):
     """
     Generate an input file.
@@ -228,6 +229,7 @@ def generate(
     :param seed: Base seed to use to generate the disorder.
     :param k_drive: Stiffness of the drive string.
     :param symmetric: Set the drive string symmetric.
+    :param test_mode: Run in test mode (smaller chunk).
     """
 
     assert not os.path.isfile(filename)
@@ -338,11 +340,8 @@ def generate(
     eps_offset = 1e-2 * (2.0 * eps0)
     nchunk = 6000
 
-    # generators = prrng.pcg32_array(initstate, initseq)
-    # epsy = eps_offset + (2.0 * eps0) * generators.weibull([nchunk], k)
-    # epsy[0: left, 0] *= init_factor
-    # epsy[right: N, 0] *= init_factor
-    # epsy = np.cumsum(epsy, axis=1)
+    if test_mode:
+        nchunk = 200
 
     c = 1.0
     G = 1.0
@@ -387,7 +386,7 @@ def generate(
         storage.dump_with_atttrs(
             file,
             "/run/event/deps",
-            eps0 * 1e-4,
+            eps0 * 5e-3,
             desc="Strain kick to apply",
         )
 
@@ -638,6 +637,8 @@ def generate(
             storage.dset_extend1d(file, "/drive/lever/target", 0, 0.0)
             storage.dset_extend1d(file, "/drive/lever/position", 0, 0.0)
 
+        assert np.min(np.diff(read_epsy(file), axis=1)) > file["/run/event/deps"][...]
+
 
 def create_check_meta(
     file: h5py.File,
@@ -673,7 +674,7 @@ def create_check_meta(
     assert tag.all_equal(deps, meta.attrs["dependencies"])
 
 
-def run(config: str, progname: str, model, init_function, filepath: str, dev: bool):
+def run(config: str, progname: str, model, init_function, filepath: str, dev: bool = False, progress: bool = True):
     """
     Run the simulation.
 
@@ -683,6 +684,7 @@ def run(config: str, progname: str, model, init_function, filepath: str, dev: bo
     :param init_function: Initialisation function.
     :param filepath: Name of the input/output file (appended).
     :param dev: Allow uncommitted changes.
+    :param progress: Show progress bar.
     """
 
     basename = os.path.basename(filepath)
@@ -697,10 +699,8 @@ def run(config: str, progname: str, model, init_function, filepath: str, dev: bo
         meta = create_check_meta(file, f"/meta/{progname}", version, dependencies(model), dev)
 
         if "completed" in meta:
-            print("Marked completed, skipping")
+            print(f'"{basename}": marked completed, skipping')
             return 1
-
-        # restore or initialise the system / output
 
         deps = file["/run/event/deps"][...]
         inc = int(file["/stored"][-1])
@@ -708,7 +708,7 @@ def run(config: str, progname: str, model, init_function, filepath: str, dev: bo
         system.setT(file["/t"][inc])
         system.setU(file[f"/disp/{inc:d}"][...])
         system.layerSetTargetUbar(file[f"/drive/ubar/{inc:d}"][...])
-        print(f'"{basename}": Loading, inc = {inc:d}')
+        print(f'"{basename}": loading, inc = {inc:d}')
 
         if "/run/event/delta_u" not in file:
 
@@ -741,16 +741,29 @@ def run(config: str, progname: str, model, init_function, filepath: str, dev: bo
                     file["/run/event/delta_ubar"][...],
                 )
 
+        nchunk = file["/cusp/epsy/nchunk"][...] - 5
+        pbar = tqdm.tqdm(total=nchunk, disable=not progress)
+
         for inc in range(inc + 1, sys.maxsize):
 
             kick = not kick
             system.eventDrivenStep(deps, kick)
 
-            niter = system.minimise()
-            if not system.boundcheck_right(5):
-                break
+            if kick:
 
-            print(f'"{basename}": inc = {inc:8d}, niter = {niter:8d}')
+                niter = system.minimise_boundcheck(5)
+
+                if niter == 0:
+                    break
+
+                if progress:
+                    pbar.n = np.max(system.plastic_CurrentIndex())
+                    pbar.set_description(f"inc = {inc:8d}, niter = {niter:8d}")
+                    pbar.refresh()
+
+            if not kick:
+                if not system.boundcheck_right(5):
+                    break
 
             storage.dset_extend1d(file, "/stored", inc, inc)
             storage.dset_extend1d(file, "/t", inc, system.t())
@@ -761,8 +774,6 @@ def run(config: str, progname: str, model, init_function, filepath: str, dev: bo
             if config == "FreeLever":
                 storage.dset_extend1d(file, "/drive/lever/target", inc, system.leverTarget())
                 storage.dset_extend1d(file, "/drive/lever/position", inc, system.leverPosition())
-
-            inc += 1
 
         print(f'"{basename}": completed')
         meta.attrs["completed"] = 1

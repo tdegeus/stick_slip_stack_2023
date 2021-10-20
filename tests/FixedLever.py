@@ -107,6 +107,7 @@ class MyTests(unittest.TestCase):
             seed=0,
             k_drive=1e-3,
             symmetric=True,
+            test_mode=True,
         )
 
         my.FixedLever.cli_run([filename, "--develop"])
