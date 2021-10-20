@@ -720,11 +720,13 @@ def run(
 
         if "/run/event/delta_u" not in file:
 
+            eps0 = file["/meta/normalisation/eps"][...]
+
             if config == "FixedLever":
-                ubar = system.layerTargetUbar_affineSimpleShear(1.0, file["/drive/height"][...])
+                ubar = system.layerTargetUbar_affineSimpleShear(eps0, file["/drive/height"][...])
                 system.initEventDriven(ubar, file["/drive/drive"][...])
             else:
-                system.initEventDriven(1.0, file["/drive/drive"][...])
+                system.initEventDriven(eps0, file["/drive/drive"][...])
 
             file["/run/event/delta_u"] = system.eventDriven_deltaU()
             file["/run/event/delta_ubar"] = system.eventDriven_deltaUbar()
