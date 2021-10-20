@@ -674,7 +674,15 @@ def create_check_meta(
     assert tag.all_equal(deps, meta.attrs["dependencies"])
 
 
-def run(config: str, progname: str, model, init_function, filepath: str, dev: bool = False, progress: bool = True):
+def run(
+    config: str,
+    progname: str,
+    model,
+    init_function,
+    filepath: str,
+    dev: bool = False,
+    progress: bool = True,
+):
     """
     Run the simulation.
 
