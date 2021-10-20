@@ -5,7 +5,6 @@ import unittest
 
 import GooseHDF5 as g5
 import h5py
-import numpy as np
 
 root = os.path.join(os.path.dirname(__file__), "..")
 if os.path.exists(os.path.join(root, "mycode_lever", "_version.py")):
@@ -83,6 +82,7 @@ class MyTests(unittest.TestCase):
         )
 
         ret = my.System.cli_compare([file_a, file_b])
+        ret.pop("==")
         expect = {"!=": ["/drive/k"]}
         self.assertEqual(ret, expect)
 
@@ -96,8 +96,6 @@ class MyTests(unittest.TestCase):
         checkname = os.path.join(dirname, my.FixedLever.file_defaults["cli_find_completed"])
         infoname = os.path.join(dirname, my.FixedLever.file_defaults["cli_ensembleinfo"])
         eventname = os.path.join(dirname, my.FixedLever.file_defaults["cli_rerun_event"])
-        delta_gamma = 1e-4 * np.ones(5)
-        delta_gamma[0] = 0
 
         if not os.path.isdir(dirname):
             os.makedirs(dirname)
@@ -109,7 +107,7 @@ class MyTests(unittest.TestCase):
             seed=0,
             k_drive=1e-3,
             symmetric=True,
-            delta_gamma=delta_gamma,
+            test_mode=True,
         )
 
         my.FixedLever.cli_run([filename, "--develop"])

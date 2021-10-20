@@ -5,7 +5,6 @@ import os
 import re
 import sys
 import textwrap
-from collections import defaultdict
 
 import click
 import GMatElastoPlasticQPot.Cartesian2d as GMat
@@ -72,34 +71,6 @@ def interpret_filename(filename):
     return info
 
 
-def compare(a: h5py.File, b: h5py.File):
-    """
-    Compare two file: will be replaced by :py:func:`GooseHDF5.compare`.
-    """
-
-    paths_a = list(g5.getdatasets(a, fold=["/disp", "/drive/ubar"]))
-    paths_b = list(g5.getdatasets(b, fold=["/disp", "/drive/ubar"]))
-    paths_a = [p for p in paths_a if p[-3:] != "..."]
-    paths_b = [p for p in paths_b if p[-3:] != "..."]
-    ret = defaultdict(list)
-
-    not_in_b = [str(i) for i in np.setdiff1d(paths_a, paths_b)]
-    not_in_a = [str(i) for i in np.setdiff1d(paths_b, paths_a)]
-    inboth = [str(i) for i in np.intersect1d(paths_a, paths_b)]
-
-    for path in not_in_a:
-        ret["<-"].append(path)
-
-    for path in not_in_b:
-        ret["->"].append(path)
-
-    for path in inboth:
-        if not g5.equal(a, b, path):
-            ret["!="].append(path)
-
-    return ret
-
-
 def cli_compare(cli_args=None):
     """
     Compare input files.
@@ -113,6 +84,7 @@ def cli_compare(cli_args=None):
     parser = argparse.ArgumentParser(formatter_class=MyFmt, description=replace_entry_point(doc))
 
     parser.add_argument("-v", "--version", action="version", version=version)
+    parser.add_argument("-d", "--datasets", action="store_true", help="Don't compare attributes.")
     parser.add_argument("file_a", type=str, help="Simulation file")
     parser.add_argument("file_b", type=str, help="Simulation file")
 
@@ -126,7 +98,11 @@ def cli_compare(cli_args=None):
 
     with h5py.File(args.file_a, "r") as a:
         with h5py.File(args.file_b, "r") as b:
-            ret = compare(a, b)
+            paths_a = list(g5.getdatasets(a, fold=["/disp", "/drive/ubar"]))
+            paths_b = list(g5.getdatasets(b, fold=["/disp", "/drive/ubar"]))
+            paths_a = [p for p in paths_a if p[-3:] != "..."]
+            paths_b = [p for p in paths_b if p[-3:] != "..."]
+            ret = g5.compare(a, b, paths_a, paths_b, attrs=not args.datasets)
 
     for key in ret:
         if key in ["=="]:
@@ -238,10 +214,10 @@ def generate(
     filename: str,
     N: int,
     nplates: int,
-    seed: int,
-    k_drive: float,
+    seed: int = 0,
+    k_drive: float = 1e-3,
     symmetric: bool = True,
-    delta_gamma: float = None,
+    test_mode: bool = False,
 ):
     """
     Generate an input file.
@@ -253,7 +229,7 @@ def generate(
     :param seed: Base seed to use to generate the disorder.
     :param k_drive: Stiffness of the drive string.
     :param symmetric: Set the drive string symmetric.
-    :param delta_gamma: Loading history (for testing only).
+    :param test_mode: Run in test mode (smaller chunk).
     """
 
     assert not os.path.isfile(filename)
@@ -364,27 +340,8 @@ def generate(
     eps_offset = 1e-2 * (2.0 * eps0)
     nchunk = 6000
 
-    # generators = prrng.pcg32_array(initstate, initseq)
-    # epsy = eps_offset + (2.0 * eps0) * generators.weibull([nchunk], k)
-    # epsy[0: left, 0] *= init_factor
-    # epsy[right: N, 0] *= init_factor
-    # epsy = np.cumsum(epsy, axis=1)
-
-    if delta_gamma is None:
-
-        # make the first n increments bigger to transverse the non-steady-state part faster
-        # to estimate n use an historic (version < 4.4.dev30+g1ccc1d3) observations in ``ss``
-
-        delta = 2e-3 * eps0
-        ss = int(100 * 2.5e-07 / delta)
-
-        delta_gamma = np.concatenate(
-            (
-                0.0 * np.ones(1),
-                10 * delta * np.ones(int(ss / 10)),
-                delta * np.ones(10000),
-            )
-        )
+    if test_mode:
+        nchunk = 200
 
     c = 1.0
     G = 1.0
@@ -428,8 +385,8 @@ def generate(
 
         storage.dump_with_atttrs(
             file,
-            "/run/epsd/kick",
-            eps0 * 1e-4,
+            "/run/event/deps",
+            eps0 * 5e-3,
             desc="Strain kick to apply",
         )
 
@@ -641,13 +598,6 @@ def generate(
 
         storage.dump_with_atttrs(
             file,
-            "/drive/delta_gamma",
-            delta_gamma,
-            desc="Affine simple shear increment",
-        )
-
-        storage.dump_with_atttrs(
-            file,
             "/drive/height",
             Hi,
             desc="Height of the loading frame of each layer",
@@ -662,8 +612,77 @@ def generate(
                 desc="Height of the spring driving the lever",
             )
 
+        desc = '(end of increment). One entry per item in "/stored".'
+        storage.create_extendible(file, "/stored", np.uint64, desc="List of stored increments")
+        storage.create_extendible(file, "/t", np.float64, desc=f"Time {desc}")
+        storage.create_extendible(file, "/kick", bool, desc=f"Kick {desc}")
 
-def run(config: str, progname: str, model, init_function, filepath: str, dev: bool):
+        storage.dset_extend1d(file, "/stored", 0, 0)
+        storage.dset_extend1d(file, "/t", 0, 0.0)
+        storage.dset_extend1d(file, "/kick", 0, True)
+
+        file["/drive/ubar/0"] = np.zeros(drive.shape, dtype=np.float64)
+        file["/drive/ubar"].attrs["desc"] = f"Loading frame position per layer {desc}"
+
+        file["/disp/0"] = np.zeros_like(coor)
+        file["/disp"].attrs["desc"] = f"Displacement {desc}"
+
+        if config == "FreeLever":
+            d = f"Target position of the lever {desc}"
+            storage.create_extendible(file, "/drive/lever/target", np.float64, desc=d)
+
+            d = f"Actual position of the lever {desc}"
+            storage.create_extendible(file, "/drive/lever/position", np.float64, desc=d)
+
+            storage.dset_extend1d(file, "/drive/lever/target", 0, 0.0)
+            storage.dset_extend1d(file, "/drive/lever/position", 0, 0.0)
+
+        assert np.min(np.diff(read_epsy(file), axis=1)) > file["/run/event/deps"][...]
+
+
+def create_check_meta(
+    file: h5py.File,
+    path: str,
+    ver: str,
+    deps: str,
+    dev: bool = False,
+) -> h5py.Group:
+    """
+    Create or read and check meta data. This function asserts that:
+    -   There are no uncommitted changes.
+    -   There are no version changes.
+
+    :param file: HDF5 archive.
+    :param path: Path in ``file``.
+    :param ver: Version string.
+    :param deps: List of dependencies.
+    :param dev: Allow uncommitted changes.
+    :return: Group to meta-data.
+    """
+
+    assert dev or not tag.has_uncommitted(ver)
+    assert dev or not tag.any_has_uncommitted(deps)
+
+    if path not in file:
+        meta = file.create_group(path)
+        meta.attrs["version"] = ver
+        meta.attrs["dependencies"] = deps
+        return meta
+
+    meta = file[path]
+    assert tag.equal(ver, meta.attrs["version"])
+    assert tag.all_equal(deps, meta.attrs["dependencies"])
+
+
+def run(
+    config: str,
+    progname: str,
+    model,
+    init_function,
+    filepath: str,
+    dev: bool = False,
+    progress: bool = True,
+):
     """
     Run the simulation.
 
@@ -673,6 +692,7 @@ def run(config: str, progname: str, model, init_function, filepath: str, dev: bo
     :param init_function: Initialisation function.
     :param filepath: Name of the input/output file (appended).
     :param dev: Allow uncommitted changes.
+    :param progress: Show progress bar.
     """
 
     basename = os.path.basename(filepath)
@@ -684,114 +704,84 @@ def run(config: str, progname: str, model, init_function, filepath: str, dev: bo
         if config == "FreeLever":
             system.setLeverProperties(file["/drive/H"][...], file["/drive/height"][...])
 
-        # check version compatibility
-
-        assert dev or not tag.has_uncommited(version)
-        assert dev or not tag.any_has_uncommitted(dependencies(model))
-
-        if f"/meta/{config}/{progname}" not in file:
-            meta = file.create_group(f"/meta/{config}/{progname}")
-            meta.attrs["version"] = version
-            meta.attrs["dependencies"] = dependencies(model)
-        else:
-            meta = file[f"/meta/{config}/{progname}"]
+        meta = create_check_meta(file, f"/meta/{progname}", version, dependencies(model), dev)
 
         if "completed" in meta:
-            print("Marked completed, skipping")
+            print(f'"{basename}": marked completed, skipping')
             return 1
 
-        assert tag.equal(version, meta.attrs["version"])
-        assert tag.all_equal(dependencies(model), meta.attrs["dependencies"])
+        deps = file["/run/event/deps"][...]
+        inc = int(file["/stored"][-1])
+        kick = file["/kick"][inc]
+        system.setT(file["/t"][inc])
+        system.setU(file[f"/disp/{inc:d}"][...])
+        system.layerSetTargetUbar(file[f"/drive/ubar/{inc:d}"][...])
+        print(f'"{basename}": loading, inc = {inc:d}')
 
-        # restore or initialise the system / output
-
-        if "/stored" in file:
-
-            inc = int(file["/stored"][-1])
-            system.setT(file["/t"][inc])
-            system.setU(file[f"/disp/{inc:d}"][...])
-            system.layerSetTargetUbar(file[f"/drive/ubar/{inc:d}"][...])
-            print(f'"{basename}": Loading, inc = {inc:d}')
-
-        else:
-
-            inc = int(0)
-            desc = '(end of increment). One entry per item in "/stored".'
-
-            storage.dset_extendible1d(
-                file=file,
-                key="/stored",
-                dtype=np.uint64,
-                value=inc,
-                desc="List of stored increments.",
-            )
-
-            storage.dset_extendible1d(
-                file=file,
-                key="/t",
-                dtype=np.float64,
-                value=system.t(),
-                desc=f"Time {desc}",
-            )
-
-            file[f"/disp/{inc}"] = system.u()
-            file["/disp"].attrs["desc"] = f"Displacement {desc}"
-
-            file[f"/drive/ubar/{inc}"] = system.layerTargetUbar()
-            file["/drive/ubar"].attrs["desc"] = f"Loading frame position per layer {desc}"
-
-            if config == "FreeLever":
-
-                storage.dset_extendible1d(
-                    file=file,
-                    key="/drive/lever/target",
-                    dtype=float,
-                    value=system.leverTarget(),
-                    desc=f"Target position of the lever {desc}",
-                )
-
-                storage.dset_extendible1d(
-                    file=file,
-                    key="/drive/lever/position",
-                    dtype=float,
-                    value=system.leverPosition(),
-                    desc=f"Actual position of the lever {desc}",
-                )
-
-        # run
-
-        if config == "FixedLever":
-            height = file["/drive/height"][...]
-            delta_gamma = file["/drive/delta_gamma"][...]
-        else:
-            height = file["/drive/H"][...]
-            delta_gamma = np.cumsum(file["/drive/delta_gamma"][...])
-
-        assert np.isclose(delta_gamma[0], 0.0)
-        inc += 1
-
-        for dgamma in delta_gamma[inc:]:
+        if "/run/event/delta_u" not in file:
 
             if config == "FixedLever":
-                system.layerTagetUbar_addAffineSimpleShear(dgamma, height)
+                ubar = system.layerTargetUbar_affineSimpleShear(1.0, file["/drive/height"][...])
+                system.initEventDriven(ubar, file["/drive/drive"][...])
             else:
-                system.setLeverTarget(height * dgamma)  # dgamma == total strain, see above
+                system.initEventDriven(1.0, file["/drive/drive"][...])
 
-            niter = system.minimise()
-            if not system.boundcheck_right(5):
-                break
-            print(f'"{basename}": inc = {inc:8d}, niter = {niter:8d}')
+            file["/run/event/delta_u"] = system.eventDriven_deltaU()
+            file["/run/event/delta_ubar"] = system.eventDriven_deltaUbar()
+            file["/run/event/active"] = system.eventDriven_targetActive()
+
+            if config == "FreeLever":
+                file["/run/event/delta_lever"] = system.eventDriven_deltaLeverPosition()
+
+        else:
+
+            if config == "FixedLever":
+                system.initEventDriven(
+                    file["/run/event/delta_ubar"][...],
+                    file["/run/event/active"][...],
+                    file["/run/event/delta_u"][...],
+                )
+            else:
+                system.initEventDriven(
+                    file["/run/event/delta_lever"][...],
+                    file["/run/event/active"][...],
+                    file["/run/event/delta_u"][...],
+                    file["/run/event/delta_ubar"][...],
+                )
+
+        nchunk = file["/cusp/epsy/nchunk"][...] - 5
+        pbar = tqdm.tqdm(total=nchunk, disable=not progress)
+
+        for inc in range(inc + 1, sys.maxsize):
+
+            kick = not kick
+            system.eventDrivenStep(deps, kick)
+
+            if kick:
+
+                niter = system.minimise_boundcheck(5)
+
+                if niter == 0:
+                    break
+
+                if progress:
+                    pbar.n = np.max(system.plastic_CurrentIndex())
+                    pbar.set_description(f"inc = {inc:8d}, niter = {niter:8d}")
+                    pbar.refresh()
+
+            if not kick:
+                if not system.boundcheck_right(5):
+                    break
 
             storage.dset_extend1d(file, "/stored", inc, inc)
             storage.dset_extend1d(file, "/t", inc, system.t())
+            storage.dset_extend1d(file, "/kick", inc, kick)
             file[f"/disp/{inc:d}"] = system.u()
             file[f"/drive/ubar/{inc:d}"] = system.layerTargetUbar()
 
             if config == "FreeLever":
                 storage.dset_extend1d(file, "/drive/lever/target", inc, system.leverTarget())
                 storage.dset_extend1d(file, "/drive/lever/position", inc, system.leverPosition())
-
-            inc += 1
 
         print(f'"{basename}": completed')
         meta.attrs["completed"] = 1
@@ -905,6 +895,7 @@ def cli_generate(cli_args: list[str], entry_points: dict, config: str):
     parser = argparse.ArgumentParser(formatter_class=MyFmt, description=doc)
 
     parser.add_argument("--develop", action="store_true", help="Allow uncommitted changes")
+    parser.add_argument("-f", "--force", action="store_true", help="Force overwrite")
     parser.add_argument("-n", "--nsim", type=int, default=1, help="#simulations")
     parser.add_argument("-N", "--size", type=int, default=2 * (3 ** 6), help="#blocks")
     parser.add_argument("-s", "--start", type=int, default=0, help="Start simulation")
@@ -946,7 +937,7 @@ def cli_generate(cli_args: list[str], entry_points: dict, config: str):
     else:
         args = parser.parse_args([str(arg) for arg in cli_args])
 
-    assert args.develop or not tag.has_uncommited(version)
+    assert args.develop or not tag.has_uncommitted(version)
     assert os.path.isdir(args.outdir)
 
     files = []
@@ -963,11 +954,15 @@ def cli_generate(cli_args: list[str], entry_points: dict, config: str):
             ]
         )
         files += [filename]
+        filepath = os.path.join(args.outdir, filename)
+
+        if args.force and os.path.isfile(filepath):
+            os.remove(filepath)
 
         generate(
             config=config,
             progname=entry_points["cli_generate"],
-            filename=os.path.join(args.outdir, filename),
+            filename=filepath,
             N=args.size,
             nplates=nplates,
             seed=i * args.size * (args.max_plates - 1),

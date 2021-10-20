@@ -1,7 +1,7 @@
 import packaging.version
 
 
-def has_uncommited(ver: str):
+def has_uncommitted(ver: str):
     """
     Check of a version string encoded that there were uncommitted changes.
 
@@ -28,7 +28,7 @@ def any_has_uncommitted(deps: list[str]) -> bool:
     V = {lib.split("=")[0]: lib.split("=")[1] for lib in deps}
 
     for lib in V:
-        if has_uncommited(V[lib]):
+        if has_uncommitted(V[lib]):
             return True
 
     return False
@@ -55,6 +55,18 @@ def all_greater_equal(a: list[str], b: list[str]) -> bool:
         return False
 
     return True
+
+
+def greater(a: str, b: str) -> bool:
+    """
+    Check if ``a`` is a version greater than that in ``b``.
+
+    :param a: Version string.
+    :param b: Version string.
+    :return: ``True`` if ``a > b``
+    """
+
+    return packaging.version.parse(a) > packaging.version.parse(b)
 
 
 def greater_equal(a: str, b: str) -> bool:
