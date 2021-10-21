@@ -386,7 +386,7 @@ def generate(
         storage.dump_with_atttrs(
             file,
             "/run/event/deps",
-            eps0 * 5e-3,
+            eps0 * 1e-4,
             desc="Strain kick to apply",
         )
 
@@ -704,10 +704,12 @@ def run(
         if config == "FreeLever":
             system.setLeverProperties(file["/drive/H"][...], file["/drive/height"][...])
 
-        meta = create_check_meta(file, f"/meta/{progname}", version, dependencies(model), dev)
+        meta = f"/meta/{config}/{progname}"
+        meta = create_check_meta(file, meta, version, dependencies(model), dev)
 
         if "completed" in meta:
-            print(f'"{basename}": marked completed, skipping')
+            if progress:
+                print(f'"{basename}": marked completed, skipping')
             return 1
 
         deps = file["/run/event/deps"][...]
@@ -716,7 +718,6 @@ def run(
         system.setT(file["/t"][inc])
         system.setU(file[f"/disp/{inc:d}"][...])
         system.layerSetTargetUbar(file[f"/drive/ubar/{inc:d}"][...])
-        print(f'"{basename}": loading, inc = {inc:d}')
 
         if "/run/event/delta_u" not in file:
 
@@ -785,7 +786,11 @@ def run(
                 storage.dset_extend1d(file, "/drive/lever/target", inc, system.leverTarget())
                 storage.dset_extend1d(file, "/drive/lever/position", inc, system.leverPosition())
 
-        print(f'"{basename}": completed')
+        if progress:
+            pbar.n = np.max(nchunk)
+            pbar.set_description("{:32s}".format("completed"))
+            pbar.refresh()
+
         meta.attrs["completed"] = 1
 
 
@@ -836,8 +841,6 @@ def basic_output(
     ret["cs"] = np.sqrt(mu / ret["rho"])
     ret["cd"] = np.sqrt((kappa + 4.0 / 3.0 * mu) / ret["rho"])
     ret["t0"] = ret["l0"] / ret["cs"]
-
-    ret["delta_gamma"] = file["/drive/delta_gamma"][...][incs] / ret["eps0"]
 
     dV = system.quad().AsTensor(2, system.quad().dV())
     idx_n = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, ret["N"])

@@ -19,18 +19,14 @@ class MyTests(unittest.TestCase):
     """
 
     def test_small(self):
+        """
+        Generate and run a small sample.
+        """
 
         historic = os.path.splitext(__file__)[0] + ".h5"
         dirname = "mytest"
         idname = "id=0.h5"
         filename = os.path.join(dirname, idname)
-        delta_gamma = np.concatenate(
-            (
-                np.zeros(1, dtype=float),
-                1e-4 * np.ones(4, dtype=float),
-                1e-5 * np.ones(100, dtype=float),
-            )
-        )
 
         if not os.path.isdir(dirname):
             os.makedirs(dirname)
@@ -42,7 +38,7 @@ class MyTests(unittest.TestCase):
             seed=0,
             k_drive=1e-3,
             symmetric=True,
-            delta_gamma=delta_gamma,
+            test_mode=True,
         )
 
         my.FreeLever.cli_run([filename, "--develop"])
@@ -50,6 +46,11 @@ class MyTests(unittest.TestCase):
         with h5py.File(filename, "r") as file:
             system = my.FreeLever.init(file)
             out = my.FreeLever.basic_output(system, file, verbose=False)
+
+        # with h5py.File(historic, "w") as file:
+        #     file["epsd"] = out["epsd"]
+        #     file["sigd"] = out["sigd"]
+        #     file["drive_fx"] = out["drive_fx"]
 
         with h5py.File(historic, "r") as file:
             self.assertTrue(np.allclose(file["epsd"][...], out["epsd"]))

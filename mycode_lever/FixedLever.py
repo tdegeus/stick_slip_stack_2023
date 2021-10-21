@@ -174,10 +174,13 @@ def runinc_event_basic(system: model.System, file: h5py.File, inc: int, Smax=sys
     idx_n = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, N)
     idx_t = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, N)
 
-    height = file["/drive/height"][...]
-    dgamma = file["/drive/delta_gamma"][inc]
+    system.initEventDriven(
+        file["/run/event/delta_ubar"][...],
+        file["/run/event/active"][...],
+        file["/run/event/delta_u"][...],
+    )
 
-    system.layerTagetUbar_addAffineSimpleShear(dgamma, height)
+    system.eventDrivenStep(file["/run/event/deps"][...], not file["/kick"][inc])
 
     R = []
     T = []
@@ -444,7 +447,6 @@ def cli_ensembleinfo(cli_args=None):
         "layers_tx",
         "inc",
         "steadystate",
-        "delta_gamma",  # todo: could be moved to normalisation
     ]
 
     if os.path.exists(args.output):
