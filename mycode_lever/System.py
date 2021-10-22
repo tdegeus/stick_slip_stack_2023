@@ -786,6 +786,8 @@ def run(
                 storage.dset_extend1d(file, "/drive/lever/target", inc, system.leverTarget())
                 storage.dset_extend1d(file, "/drive/lever/position", inc, system.leverPosition())
 
+            file.flush()
+
         if progress:
             pbar.n = np.max(nchunk)
             pbar.set_description("{:32s}".format("completed"))
