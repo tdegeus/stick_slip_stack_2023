@@ -758,7 +758,7 @@ def run(
         for inc in range(inc + 1, sys.maxsize):
 
             kick = not kick
-            system.eventDrivenStep(deps, kick)
+            system.eventDrivenStep(deps, kick, +1, True)
 
             if kick:
 
