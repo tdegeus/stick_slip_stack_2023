@@ -1,3 +1,4 @@
+
 import argparse
 import inspect
 import itertools
@@ -11,6 +12,7 @@ import GMatElastoPlasticQPot.Cartesian2d as GMat
 import GooseFEM
 import GooseHDF5 as g5
 import h5py
+import GooseMPL as gplt
 import matplotlib.pyplot as plt
 import numpy as np
 import prrng
@@ -758,7 +760,7 @@ def run(
         for inc in range(inc + 1, sys.maxsize):
 
             kick = not kick
-            system.eventDrivenStep(deps, kick, +1, True)
+            system.eventDrivenStep(deps, kick, direction=+1, yield_element=True)
 
             if kick:
 
@@ -822,6 +824,7 @@ def basic_output(
         S_layers=np.zeros((ninc, nlayer), dtype=int),
         A_layers=np.zeros((ninc, nlayer), dtype=int),
         inc=incs,
+        kick=file["/kick"][incs],
         N=file["/meta/normalisation/N"][...],
         nlayer=nlayer,
         is_plastic=file["/layers/is_plastic"][...],
@@ -1060,8 +1063,9 @@ def cli_plot(cli_args: list[str], init_function):
     if args.marker:
         opts["marker"] = args.marker
 
-    fig, ax = plt.subplots()
-    ax.plot(out["epsd"], out["sigd"], **opts)
+    fig, axes = gplt.subplots(ncols=2)
+    axes[0].plot(out["epsd"], out["sigd"], **opts)
+    axes[1].plot(out["epsd"], np.cumsum(out["S_layers"], axis=0), **opts)
 
     if args.output:
         fig.savefig(args.output)
