@@ -1,4 +1,3 @@
-
 import argparse
 import inspect
 import itertools
@@ -11,8 +10,8 @@ import click
 import GMatElastoPlasticQPot.Cartesian2d as GMat
 import GooseFEM
 import GooseHDF5 as g5
-import h5py
 import GooseMPL as gplt
+import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import prrng
