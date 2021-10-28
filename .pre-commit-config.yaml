@@ -39,11 +39,6 @@ repos:
   rev: v1.18.0
   hooks:
   - id: setup-cfg-fmt
-- repo: https://github.com/pocc/pre-commit-hooks
-  rev: v1.3.4
-  hooks:
-  - id: clang-format
-    args: [-i]
 # check docstrings
 # - repo: https://github.com/econchick/interrogate
 #   rev: 1.4.0
