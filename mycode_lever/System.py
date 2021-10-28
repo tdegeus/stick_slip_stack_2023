@@ -1023,6 +1023,66 @@ def cli_run(cli_args: list[str], entry_points: dict, config: str, model, init_fu
     )
 
 
+def cli_copy_perturbation(cli_args: list[str], entry_points: dict, config: str):
+    """
+    Run simulation.
+    """
+
+    class MyFmt(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
+        pass
+
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    doc = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+    parser = argparse.ArgumentParser(formatter_class=MyFmt, description=doc)
+
+    parser.add_argument("-v", "--version", action="version", version=version)
+    parser.add_argument("source", type=str, help="Source")
+    parser.add_argument("files", nargs="*", type=str, help="Destination(s)")
+
+    if cli_args is None:
+        args = parser.parse_args(sys.argv[1:])
+    else:
+        args = parser.parse_args([str(arg) for arg in cli_args])
+
+    assert [os.path.isfile(args.source)]
+    assert [os.path.isfile(f) for f in args.files]
+
+    with h5py.File(args.source, "r") as file:
+
+        coor = file["coor"][...]
+        conn = file["conn"][...]
+        dofs = file["dofs"][...]
+        iip = file["iip"][...]
+        active = file["/run/event/active"][...]
+        delta_u = file["/run/event/delta_u"][...]
+        delta_ubar = file["/run/event/delta_ubar"][...]
+
+        if config == "FreeLever":
+            delta_lever = file["/run/event/delta_lever"][...]
+
+    for filepath in args.files:
+
+        with h5py.File(filepath, "a") as file:
+
+            assert "/run/event/delta_ubar" not in file
+            assert "/run/event/active" not in file
+            assert "/run/event/delta_u" not in file
+            assert config == "FixedLever" or "/run/event/delta_ubar" not in file
+            assert config == "FixedLever" or "/drive/H" in file
+            assert config == "FreeLever" or "/drive/H" not in file
+            assert np.allclose(coor, file["coor"][...])
+            assert np.all(np.equal(conn, file["conn"][...]))
+            assert np.all(np.equal(dofs, file["dofs"][...]))
+            assert np.all(np.equal(iip, file["iip"][...]))
+
+            file["/run/event/active"] = active
+            file["/run/event/delta_u"] = delta_u
+            file["/run/event/delta_ubar"] = delta_ubar
+
+            if config == "FreeLever":
+                file["/run/event/delta_lever"] = delta_lever
+
+
 def cli_plot(cli_args: list[str], init_function):
     """
     Plot basic output.

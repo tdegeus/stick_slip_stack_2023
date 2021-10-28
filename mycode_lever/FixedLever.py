@@ -20,6 +20,7 @@ from ._version import version
 config = "FixedLever"
 
 entry_points = dict(
+    cli_copy_perturbation="FixedLever_CopyPerturbation",
     cli_ensembleinfo="FixedLever_EnsembleInfo",
     cli_find_completed="FixedLever_FindCompleted",
     cli_generate="FixedLever_Generate",
@@ -95,6 +96,13 @@ def cli_run(cli_args=None):
     return System.cli_run(
         cli_args=cli_args, entry_points=entry_points, config=config, model=model, init_function=init
     )
+
+
+def cli_copy_perturbation(cli_args=None):
+    """
+    See :py:func:`System.cli_copy_perturbation`.
+    """
+    return System.cli_copy_perturbation(cli_args=cli_args, entry_points=entry_points, config=config)
 
 
 def find_completed(filepaths: list[str]) -> list[str]:

@@ -6,6 +6,7 @@ from . import System
 config = "FreeLever"
 
 entry_points = dict(
+    cli_copy_perturbation="FreeLever_CopyPerturbation",
     cli_generate="FreeLever_Generate",
     cli_plot="FreeLever_Plot",
     cli_run="FreeLever_Run",
@@ -56,6 +57,13 @@ def cli_run(cli_args=None):
     return System.cli_run(
         cli_args=cli_args, entry_points=entry_points, config=config, model=model, init_function=init
     )
+
+
+def cli_copy_perturbation(cli_args=None):
+    """
+    See :py:func:`System.cli_copy_perturbation`.
+    """
+    return System.cli_copy_perturbation(cli_args=cli_args, entry_points=entry_points, config=config)
 
 
 def basic_output(*args, **kwargs):
