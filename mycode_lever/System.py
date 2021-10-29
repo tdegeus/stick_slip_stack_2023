@@ -671,8 +671,9 @@ def create_check_meta(
         return meta
 
     meta = file[path]
-    assert tag.equal(ver, meta.attrs["version"])
-    assert tag.all_equal(deps, meta.attrs["dependencies"])
+    assert dev or tag.equal(ver, meta.attrs["version"])
+    assert dev or tag.all_equal(deps, meta.attrs["dependencies"])
+    return meta
 
 
 def run(
