@@ -649,7 +649,8 @@ def create_check_meta(
     dev: bool = False,
 ) -> h5py.Group:
     """
-    Create or read and check meta data. This function asserts that:
+    Create or read/check meta data. This function asserts that:
+
     -   There are no uncommitted changes.
     -   There are no version changes.
 
