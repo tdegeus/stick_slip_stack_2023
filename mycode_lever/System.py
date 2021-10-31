@@ -761,7 +761,7 @@ def run(
         for inc in range(inc + 1, sys.maxsize):
 
             kick = not kick
-            system.eventDrivenStep(deps, kick, direction=+1, yield_element=True)
+            system.eventDrivenStep(deps, kick, direction=+1, yield_element=True, fallback=True)
 
             if kick:
 
