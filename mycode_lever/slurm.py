@@ -254,6 +254,7 @@ def cli_serial_group(cli_args=None):
 
     account = slurm_defaults["account"]
     parser.add_argument("-a", "--account", type=str, default=account, help="Account")
+    parser.add_argument("-b", "--basename", type=str, help="Basename for scripts. Default: command")
     parser.add_argument("-c", "--command", type=str, help="Command to use")
     parser.add_argument("-n", "--group", type=int, default=1, help="#commands to group")
     parser.add_argument("-o", "--outdir", type=str, default=".", help="Output dir")
@@ -269,7 +270,7 @@ def cli_serial_group(cli_args=None):
     commands = [f"{args.command} {file}" for file in files]
     serial_group(
         commands,
-        basename=args.command,
+        basename=args.basename if args.basename else args.command,
         group=args.group,
         outdir=args.outdir,
         sbatch={"time": args.time, "account": args.account},
