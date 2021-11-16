@@ -455,6 +455,7 @@ def cli_ensembleinfo(cli_args=None):
         "layers_tx",
         "inc",
         "steadystate",
+        "kick",
     ]
 
     if os.path.exists(args.output):

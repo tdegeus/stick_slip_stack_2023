@@ -617,10 +617,12 @@ def generate(
         storage.create_extendible(file, "/stored", np.uint64, desc="List of stored increments")
         storage.create_extendible(file, "/t", np.float64, desc=f"Time {desc}")
         storage.create_extendible(file, "/kick", bool, desc=f"Kick {desc}")
+        storage.create_extendible(file, "/yield_element", bool, desc=f"Yield element {desc}")
 
         storage.dset_extend1d(file, "/stored", 0, 0)
         storage.dset_extend1d(file, "/t", 0, 0.0)
         storage.dset_extend1d(file, "/kick", 0, True)
+        storage.dset_extend1d(file, "/yield_element", 0, False)
 
         file["/drive/ubar/0"] = np.zeros(drive.shape, dtype=np.float64)
         file["/drive/ubar"].attrs["desc"] = f"Loading frame position per layer {desc}"
@@ -677,6 +679,20 @@ def create_check_meta(
     return meta
 
 
+def _restore_inc(file: h5py.File, system, inc: int):
+    """
+    Restore an increment.
+
+    :param file: Open simulation HDF5 archive (read-only).
+    :param system: The system,
+    :param inc: Increment number.
+    """
+
+    system.setT(file["/t"][inc])
+    system.setU(file[f"/disp/{inc:d}"][...])
+    system.layerSetTargetUbar(file[f"/drive/ubar/{inc:d}"][...])
+
+
 def run(
     config: str,
     progname: str,
@@ -718,9 +734,7 @@ def run(
         deps = file["/run/event/deps"][...]
         inc = int(file["/stored"][-1])
         kick = file["/kick"][inc]
-        system.setT(file["/t"][inc])
-        system.setU(file[f"/disp/{inc:d}"][...])
-        system.layerSetTargetUbar(file[f"/drive/ubar/{inc:d}"][...])
+        _restore_inc(file, system, inc)
 
         if "/run/event/delta_u" not in file:
 
@@ -760,12 +774,29 @@ def run(
 
         for inc in range(inc + 1, sys.maxsize):
 
+            yield_element = False
             kick = not kick
-            system.eventDrivenStep(deps, kick, direction=+1, yield_element=True, fallback=True)
+
+            if kick:
+                idx_n = system.plastic_CurrentIndex()
+
+            system.eventDrivenStep(deps, kick, direction=+1, yield_element=False, iterative=True)
 
             if kick:
 
                 niter = system.minimise_boundcheck(5)
+                idx = system.plastic_CurrentIndex()
+
+                if niter == 0:
+                    break
+
+                if np.all(idx == idx_n):
+                    _restore_inc(file, system, inc - 1)
+                    system.eventDrivenStep(
+                        deps, kick, direction=+1, yield_element=True, iterative=True
+                    )
+                    niter = system.minimise_boundcheck(5)
+                    yield_element = True
 
                 if niter == 0:
                     break
@@ -782,6 +813,7 @@ def run(
             storage.dset_extend1d(file, "/stored", inc, inc)
             storage.dset_extend1d(file, "/t", inc, system.t())
             storage.dset_extend1d(file, "/kick", inc, kick)
+            storage.dset_extend1d(file, "/yield_element", inc, yield_element)
             file[f"/disp/{inc:d}"] = system.u()
             file[f"/drive/ubar/{inc:d}"] = system.layerTargetUbar()
 
