@@ -679,10 +679,11 @@ def create_check_meta(
     return meta
 
 
-def _restore_inc(file: h5py.File, system, inc: int):
+def _restore_inc(config: str, file: h5py.File, system, inc: int):
     """
     Restore an increment.
 
+    :param config: Name of the configuration ("FixedLever", or "FreeLever")
     :param file: Open simulation HDF5 archive (read-only).
     :param system: The system,
     :param inc: Increment number.
@@ -691,6 +692,59 @@ def _restore_inc(file: h5py.File, system, inc: int):
     system.setT(file["/t"][inc])
     system.setU(file[f"/disp/{inc:d}"][...])
     system.layerSetTargetUbar(file[f"/drive/ubar/{inc:d}"][...])
+
+    if config == "FreeLever":
+        # lever position is computed from equilibrium
+        system.setLeverTarget(file["/drive/lever/target"][inc])
+
+
+def _init_event_driven(config: str, file: h5py.File, system):
+    """
+    Initialise event-driven perturbation.
+
+    :param config: Name of the configuration ("FixedLever", or "FreeLever")
+    :param file: Open simulation HDF5 archive (read-only).
+    :param system: The system,
+    """
+
+    eps0 = file["/meta/normalisation/eps"][...]
+
+    if config == "FixedLever":
+        ubar = system.layerTargetUbar_affineSimpleShear(eps0, file["/drive/height"][...])
+        system.initEventDriven(ubar, file["/drive/drive"][...])
+    else:
+        system.initEventDriven(eps0, file["/drive/drive"][...])
+
+    file["/run/event/delta_u"] = system.eventDriven_deltaU()
+    file["/run/event/delta_ubar"] = system.eventDriven_deltaUbar()
+    file["/run/event/active"] = system.eventDriven_targetActive()
+
+    if config == "FreeLever":
+        file["/run/event/delta_lever"] = system.eventDriven_deltaLeverPosition()
+
+
+def _restore_event_driven(config: str, file: h5py.File, system):
+    """
+    Restore event driven settings.
+
+    :param config: Name of the configuration ("FixedLever", or "FreeLever")
+    :param file: Open simulation HDF5 archive (read-only).
+    :param system: The system,
+    """
+
+    if config == "FixedLever":
+        system.initEventDriven(
+            file["/run/event/delta_ubar"][...],
+            file["/run/event/active"][...],
+            file["/run/event/delta_u"][...],
+        )
+    else:
+        system.initEventDriven(
+            file["/run/event/delta_lever"][...],
+            file["/run/event/active"][...],
+            file["/run/event/delta_u"][...],
+            file["/run/event/delta_ubar"][...],
+        )
 
 
 def run(
@@ -731,43 +785,15 @@ def run(
                 print(f'"{basename}": marked completed, skipping')
             return 1
 
-        deps = file["/run/event/deps"][...]
         inc = int(file["/stored"][-1])
+        deps = file["/run/event/deps"][...]
         kick = file["/kick"][inc]
-        _restore_inc(file, system, inc)
+        _restore_inc(config, file, system, inc)
 
         if "/run/event/delta_u" not in file:
-
-            eps0 = file["/meta/normalisation/eps"][...]
-
-            if config == "FixedLever":
-                ubar = system.layerTargetUbar_affineSimpleShear(eps0, file["/drive/height"][...])
-                system.initEventDriven(ubar, file["/drive/drive"][...])
-            else:
-                system.initEventDriven(eps0, file["/drive/drive"][...])
-
-            file["/run/event/delta_u"] = system.eventDriven_deltaU()
-            file["/run/event/delta_ubar"] = system.eventDriven_deltaUbar()
-            file["/run/event/active"] = system.eventDriven_targetActive()
-
-            if config == "FreeLever":
-                file["/run/event/delta_lever"] = system.eventDriven_deltaLeverPosition()
-
+            _init_event_driven(config, file, system)
         else:
-
-            if config == "FixedLever":
-                system.initEventDriven(
-                    file["/run/event/delta_ubar"][...],
-                    file["/run/event/active"][...],
-                    file["/run/event/delta_u"][...],
-                )
-            else:
-                system.initEventDriven(
-                    file["/run/event/delta_lever"][...],
-                    file["/run/event/active"][...],
-                    file["/run/event/delta_u"][...],
-                    file["/run/event/delta_ubar"][...],
-                )
+            _restore_event_driven(config, file, system)
 
         nchunk = file["/cusp/epsy/nchunk"][...] - 5
         pbar = tqdm.tqdm(total=nchunk, disable=not progress)
@@ -791,7 +817,7 @@ def run(
                     break
 
                 if np.all(idx == idx_n):
-                    _restore_inc(file, system, inc - 1)
+                    _restore_inc(config, file, system, inc - 1)
                     system.eventDrivenStep(
                         deps, kick, direction=+1, yield_element=True, iterative=True
                     )
@@ -829,6 +855,80 @@ def run(
             pbar.refresh()
 
         meta.attrs["completed"] = 1
+
+
+def runinc_event_basic(config: str, system, file: h5py.File, inc: int, Smax=None) -> dict:
+    """
+    Rerun increment and get basic event information.
+
+    :param config: Name of the configuration ("FixedLever", or "FreeLever")
+    :param system: The system (modified: increment loaded/rerun).
+    :param file: Open simulation HDF5 archive (read-only).
+    :param inc: The increment to rerun.
+    :param Smax: Stop at given S (to avoid spending time on final energy minimisation).
+    :return: A dictionary as follows::
+
+        r: Position of yielding event (block index).
+        t: Time of each yielding event.
+        S: Size (signed) of the yielding event.
+    """
+
+    stored = file["/stored"][...]
+
+    if Smax is None:
+        Smax = np.inf
+
+    assert inc > 0
+    assert inc in stored
+    assert inc - 1 in stored
+
+    _restore_inc(config, file, system, inc - 1)
+    _restore_event_driven(config, file, system)
+
+    idx_n = system.plastic_CurrentIndex()[:, 0].astype(int)
+    idx_t = system.plastic_CurrentIndex()[:, 0].astype(int)
+
+    system.eventDrivenStep(
+        file["/run/event/deps"][...],
+        file["/kick"][inc],
+        direction=+1,
+        yield_element=file["/yield_element"][inc],
+        iterative=True,
+    )
+
+    R = []
+    T = []
+    S = []
+
+    while True:
+
+        niter = system.timeStepsUntilEvent()
+
+        idx = system.plastic_CurrentIndex()[:, 0].astype(int)
+        t = system.t()
+
+        for r in np.argwhere(idx != idx_t):
+            R += [r]
+            T += [t * np.ones(r.shape)]
+            S += [(idx - idx_t)[r]]
+
+        idx_t = np.array(idx, copy=True)
+
+        if np.sum(idx - idx_n) >= Smax:
+            break
+
+        if niter == 0:
+            break
+
+    ret = dict(r=np.array(R).ravel(), t=np.array(T).ravel(), S=np.array(S).ravel())
+
+    # check docstring
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    doc = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+    d = doc.split(":return:")[1].split("\n", 2)[2]
+    _check_output(yaml.safe_load(d), ret)
+
+    return ret
 
 
 def basic_output(
@@ -1059,7 +1159,8 @@ def cli_run(cli_args: list[str], entry_points: dict, config: str, model, init_fu
 
 def cli_copy_perturbation(cli_args: list[str], entry_points: dict, config: str):
     """
-    Run simulation.
+    Copy pre-computed perturbation to be used in then event driven protocol to
+    (a bunch of) un-run simulations.
     """
 
     class MyFmt(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
@@ -1115,6 +1216,122 @@ def cli_copy_perturbation(cli_args: list[str], entry_points: dict, config: str):
 
             if config == "FreeLever":
                 file["/run/event/delta_lever"] = delta_lever
+
+
+def cli_rerun_event(
+    cli_args: list[str], entry_points: dict, file_defaults: dict, config: str, model
+):
+    """
+    Rerun increments and store basic event info (position and time).
+    Tip: truncate when (know) S is reached to not waste time on final stage of energy minimisation.
+    """
+
+    class MyFmt(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
+        pass
+
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    doc = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+    parser = argparse.ArgumentParser(formatter_class=MyFmt, description=replace_entry_point(doc))
+    progname = entry_points[funcname]
+    output = file_defaults[funcname]
+
+    parser.add_argument("-s", "--smax", type=int, help="Truncate at a maximum total S")
+    parser.add_argument("-f", "--force", action="store_true", help="Force overwrite")
+    parser.add_argument("-i", "--inc", required=True, type=int, help="Increment number")
+    parser.add_argument("-o", "--output", type=str, default=output, help="Output file")
+    parser.add_argument("-v", "--version", action="version", version=version)
+    parser.add_argument("file", type=str, help="Simulation file")
+
+    if cli_args is None:
+        args = parser.parse_args(sys.argv[1:])
+    else:
+        args = parser.parse_args([str(arg) for arg in cli_args])
+
+    assert os.path.isfile(args.file)
+
+    if not args.force:
+        if os.path.isfile(args.output):
+            if not click.confirm(f'Overwrite "{args.output}"?'):
+                raise OSError("Cancelled")
+
+    with h5py.File(args.file, "r") as file:
+        system = init(file, model)
+        ret = runinc_event_basic(config, system, file, args.inc, args.smax)
+
+    with h5py.File(args.output, "w") as file:
+        file["r"] = ret["r"]
+        file["t"] = ret["t"]
+        file["S"] = ret["S"]
+        meta = file.create_group(f"/meta/{config}/{progname}")
+        meta.attrs["version"] = version
+        meta.attrs["dependencies"] = dependencies(model)
+
+
+def cli_job_rerun_multislip(cli_args: list[str], entry_points: dict):
+    """
+    Rerun increments that have events in which more than one layer slips.
+    To consider a layer as having slipped an arbitrary fraction of blocks need to have slipped
+    on that layer.
+    """
+
+    class MyFmt(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
+        pass
+
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    doc = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+    parser = argparse.ArgumentParser(formatter_class=MyFmt, description=replace_entry_point(doc))
+    executable = entry_points["cli_rerun_event"]
+
+    parser.add_argument("info", type=str, help="EnsembleInfo (read-only)")
+    parser.add_argument("-m", "--min", type=float, default=0.5, help="fraction of slipping blocks")
+    parser.add_argument("-n", "--group", type=int, default=50, help="#pushes to group per job")
+    parser.add_argument("-o", "--outdir", type=str, default=os.getcwd(), help="Output directory")
+    parser.add_argument("-v", "--version", action="version", version=version)
+    parser.add_argument("-w", "--time", type=str, default="24h", help="Walltime")
+
+    if cli_args is None:
+        args = parser.parse_args(sys.argv[1:])
+    else:
+        args = parser.parse_args([str(arg) for arg in cli_args])
+
+    assert os.path.isfile(args.info)
+
+    if not os.path.isdir(args.outdir):
+        os.makedirs(args.outdir)
+
+    basedir = os.path.dirname(args.info)
+
+    commands = []
+
+    with h5py.File(args.info, "r") as file:
+
+        N = file["/normalisation/N"][...]
+
+        for full in file["/full"].attrs["stored"]:
+            S = file[f"/full/{full}/S_layers"][...]
+            A = file[f"/full/{full}/A_layers"][...]
+            nany = np.sum(S > 0, axis=1)
+            nall = np.sum(A >= args.min * N, axis=1)
+            incs = np.argwhere(np.logical_and(nany > 1, nall >= 1)).ravel()
+
+            if len(incs) == 0:
+                continue
+
+            simid = os.path.splitext(os.path.basename(full))[0]
+            filepath = os.path.join(basedir, full)
+            relfile = os.path.relpath(filepath, args.outdir)
+
+            for i in incs:
+                s = np.sum(S[i, :])
+                commands += [f"{executable} -i {i:d} -s {s:d} -o {simid}_inc={i:d}.h5 {relfile}"]
+
+    slurm.serial_group(
+        commands,
+        basename=executable,
+        group=args.group,
+        outdir=args.outdir,
+        sbatch={"time": args.time},
+    )
 
 
 def cli_plot(cli_args: list[str], init_function):
