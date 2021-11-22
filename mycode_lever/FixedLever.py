@@ -232,6 +232,8 @@ def cli_ensembleinfo(cli_args=None):
         "nlayer",
         "is_plastic",
         "height",
+        "drive",
+        "volume",
     ]
 
     fields_full = [
@@ -239,15 +241,20 @@ def cli_ensembleinfo(cli_args=None):
         "sigd",
         "epsd_layers",
         "sigd_layers",
+        "S",
+        "A",
         "S_layers",
         "A_layers",
-        "drive_ux",
-        "drive_fx",
-        "layers_ux",
-        "layers_tx",
+        "ubarx_layers",
+        "fxdrive_layers",
+        "gamma",
         "inc",
         "steadystate",
         "kick",
+    ]
+
+    fields_other = [
+        "seed",
     ]
 
     if os.path.exists(args.output):
@@ -265,6 +272,7 @@ def cli_ensembleinfo(cli_args=None):
 
             # read output
             out = System.basic_output(system, file, verbose=False)
+            System._check_output(fields_norm + fields_full + fields_other, out)
             seeds += [out["seed"]]
 
             # store/check normalisation

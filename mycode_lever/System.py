@@ -5,8 +5,10 @@ import os
 import re
 import sys
 import textwrap
+from typing import Union
 
 import click
+import cppcolormap as cm
 import GMatElastoPlasticQPot.Cartesian2d as GMat
 import GooseFEM
 import GooseHDF5 as g5
@@ -16,6 +18,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import prrng
 import tqdm
+import yaml
 from numpy.typing import ArrayLike
 
 from . import mesh
@@ -204,9 +207,12 @@ def steadystate(epsd: ArrayLike, sigd: ArrayLike, **kwargs):
     K = np.empty_like(sigd)
     K[0] = np.inf
     K[1:] = (sigd[1:] - sigd[0]) / (epsd[1:] - epsd[0])
+    steadystate = K <= 0.95 * K[1]
 
-    steadystate = max(2, np.argmax(K <= 0.95 * K[1]))
-    return steadystate
+    if not np.any(steadystate):
+        return sys.maxsize
+
+    return max(2, np.argmax(steadystate))
 
 
 def generate(
@@ -308,7 +314,6 @@ def generate(
     conn = stitch.conn()
 
     L = np.max(coor[:, 0]) - np.min(coor[:, 0])
-    # H = np.max(coor[:, 1]) - np.min(coor[:, 1])
 
     Hi = []
     for i in range(nlayer):
@@ -643,6 +648,53 @@ def generate(
         assert np.min(np.diff(read_epsy(file), axis=1)) > file["/run/event/deps"][...]
 
 
+def colors(name: str = "plates") -> list:
+    """
+    Return color-cycle.
+
+    :param name: ``"plates"`` or ``"interfaces"`` or ``"layers"``
+    :return: List of colors.
+    """
+
+    if name.lower() == "plates":
+        return [cm.tue()[0], cm.tue()[4], cm.tue()[6], cm.tue()[8], cm.tue()[10]]
+
+    if name.lower() == "interfaces":
+        return [cm.tue()[1], cm.tue()[5], cm.tue()[7], cm.tue()[9]]
+
+    if name.lower() == "layers":
+        return [
+            cm.tue()[0],
+            cm.tue()[1],
+            cm.tue()[4],
+            cm.tue()[5],
+            cm.tue()[6],
+            cm.tue()[7],
+            cm.tue()[8],
+            cm.tue()[9],
+            cm.tue()[10],
+        ]
+
+    raise OSError("Unknown name, choose from 'plates' or 'interfaces'")
+
+
+def markers(name: str = "plates") -> list:
+    """
+    Return marker-cycle.
+
+    :param name: ``"plates"`` or ``"interfaces"``
+    :return: List of markers.
+    """
+
+    if name.lower() == "plates":
+        return ["o", "^", ">", "v", "<"]
+
+    if name.lower() == "interfaces":
+        return ["^", ">", "v", "<"]
+
+    raise OSError("Unknown name, choose from 'plates' or 'interfaces'")
+
+
 def create_check_meta(
     file: h5py.File,
     path: str,
@@ -934,6 +986,23 @@ def runinc_event_basic(config: str, system, file: h5py.File, inc: int, Smax=None
     return ret
 
 
+def _check_output(a: Union[dict, list], b: Union[dict, list]):
+    """
+    Check if a dictionary/list ``a`` has all fields as ``b`` and vice-versa.
+
+    :param a: List or dictionary.
+    :param b: List or dictionary.
+    """
+
+    for key in a:
+        if key not in b:
+            raise OSError(f"{key} not in b")
+
+    for key in b:
+        if key not in a:
+            raise OSError(f"{key} not in a")
+
+
 def basic_output(
     system,
     file: h5py.File,
@@ -945,6 +1014,40 @@ def basic_output(
     :param system: The system (modified: all increments visited).
     :param file: Open simulation HDF5 archive (read-only).
     :param verbose: Print progress.
+    :return: A dictionary as follows::
+
+        epsd: np.array([ninc]) # macroscopic strain, units: eps0
+        sigd: np.array([ninc]) # macroscopic stress, units: sig0
+        epsd_layers: np.array([ninc, nlayer]) # strain averaged per layer, units: eps0
+        sigd_layers: np.array([ninc, nlayer]) # stress averaged per layer, units: sig0
+        S: np.array([ninc]) # number of times that blocks yielded
+        A: np.array([ninc]) # number blocks that yielded
+        S_layers: np.array([ninc, nlayer]) # S per layer
+        A_layers: np.array([ninc, nlayer]) # A per layer
+        ubarx_layers: np.array([ninc, nlayer]) # average x-displacement per layer
+        fxdrive_layers: np.array([ninc, nlayer]) # reaction for per layer: only valid if drive[:, 0]
+        gamma: np.array([ninc]) # rotation of the lever, units: degrees
+        inc: np.array([ninc]) # increment numbers
+        kick: np.array([ninc]) # kick (True) or elastic load (False)
+        steadystate: int # first steadystate increment (or infinity)
+        N: int # number of blocks in horizontal direction
+        nlayer: int # number of layers
+        is_plastic: np.array([nlayer]) # layer set plastic (True) or elastic (False)
+        drive: np.array([nlayer]) # layer is driven (True) or free (False)
+        height: np.array([nlayer]) # height of the driving spring of each layer
+        volume: float # volume of the system
+        eps0: float # typical yield strain
+        sig0: float # typical yield stress
+        G: float # shear modulus
+        K: float # bulk modulus
+        rho: float # mass density
+        cs: float # shear wave speed
+        cd: float # dilatational wave speed
+        l0: float # linear block size
+        t0: float # typical time == l0 / cs
+        dt: float # time step
+        kdrive: float # stiffness of the driving spring
+        seed: int # base seed
     """
 
     incs = file["/stored"][...]
@@ -953,12 +1056,17 @@ def basic_output(
     nlayer = system.nlayer()
 
     ret = dict(
-        epsd=np.empty((ninc), dtype=float),
-        sigd=np.empty((ninc), dtype=float),
-        epsd_layers=np.empty((ninc, nlayer), dtype=float),
-        sigd_layers=np.empty((ninc, nlayer), dtype=float),
+        epsd=np.zeros((ninc), dtype=float),
+        sigd=np.zeros((ninc), dtype=float),
+        epsd_layers=np.zeros((ninc, nlayer), dtype=float),
+        sigd_layers=np.zeros((ninc, nlayer), dtype=float),
         S_layers=np.zeros((ninc, nlayer), dtype=int),
         A_layers=np.zeros((ninc, nlayer), dtype=int),
+        ubarx_layers=np.zeros((ninc, nlayer), dtype=float),
+        fxdrive_layers=np.zeros((ninc, nlayer), dtype=float),
+        S=np.zeros((ninc), dtype=int),
+        A=np.zeros((ninc), dtype=int),
+        gamma=np.zeros((ninc), dtype=float),
         inc=incs,
         kick=file["/kick"][incs],
         N=file["/meta/normalisation/N"][...],
@@ -983,14 +1091,12 @@ def basic_output(
     ret["cd"] = np.sqrt((kappa + 4.0 / 3.0 * mu) / ret["rho"])
     ret["t0"] = ret["l0"] / ret["cs"]
 
-    dV = system.quad().AsTensor(2, system.quad().dV())
+    dV = system.quad().dV()
+    ret["volume"] = np.sum(dV)
+    dV = system.quad().AsTensor(2, dV)
     idx_n = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, ret["N"])
-    drive_x = np.argwhere(ret["drive"][:, 0]).ravel()
-
-    ret["drive_ux"] = np.zeros((ninc, drive_x.size), dtype=float)
-    ret["drive_fx"] = np.zeros((ninc, drive_x.size), dtype=float)
-    ret["layers_ux"] = np.zeros((ninc, nlayer), dtype=float)
-    ret["layers_tx"] = np.zeros((ninc, nlayer), dtype=float)
+    idx_0 = np.array(idx_n, copy=True)
+    ret["steadystate"] = None
 
     for inc in tqdm.tqdm(incs, disable=not verbose):
 
@@ -1000,10 +1106,10 @@ def basic_output(
         u = file[f"/disp/{inc:d}"][...]
         system.setU(u)
 
-        ret["drive_ux"][inc, :] = ubar[drive_x, 0] / ret["height"][drive_x]
-        ret["drive_fx"][inc, :] = system.layerFdrive()[drive_x, 0] / ret["kdrive"]
-        ret["layers_ux"][inc, :] = system.layerUbar()[:, 0]
-        ret["layers_tx"][inc, :] = system.layerTargetUbar()[:, 0]
+        ret["gamma"][inc] = 90 - np.rad2deg(np.arctan2(ret["height"][-1], ubar[-1, 0]))
+        assert np.allclose(
+            ret["gamma"][inc], 90 - np.rad2deg(np.arctan2(ret["height"], ubar[:, 0]))
+        )
 
         Sig = system.Sig() / ret["sig0"]
         Eps = system.Eps() / ret["eps0"]
@@ -1016,14 +1122,31 @@ def basic_output(
             ret["epsd_layers"][inc, i] = GMat.Epsd(E)
             ret["sigd_layers"][inc, i] = GMat.Sigd(S)
 
-        ret["S_layers"][inc, ret["is_plastic"]] = np.sum(idx - idx_n, axis=1)
-        ret["A_layers"][inc, ret["is_plastic"]] = np.sum(idx != idx_n, axis=1)
         ret["epsd"][inc] = GMat.Epsd(np.average(Eps, weights=dV, axis=(0, 1)))
         ret["sigd"][inc] = GMat.Sigd(np.average(Sig, weights=dV, axis=(0, 1)))
+        ret["S"][inc] = np.sum(idx - idx_n)
+        ret["A"][inc] = np.sum(idx != idx_n)
+        ret["S_layers"][inc, ret["is_plastic"]] = np.sum(idx - idx_n, axis=1)
+        ret["A_layers"][inc, ret["is_plastic"]] = np.sum(idx != idx_n, axis=1)
+        ret["fxdrive_layers"][inc, :] = system.layerFdrive()[:, 0] / ret["kdrive"]
+        ret["ubarx_layers"][inc, :] = system.layerUbar()[:, 0]
+
+        if ret["steadystate"] is None:
+            if np.all(idx != idx_0):
+                ret["steadystate"] = inc
 
         idx_n = np.array(idx, copy=True)
 
-    ret["steadystate"] = steadystate(**ret)
+    if ret["steadystate"] is None:
+        ret["steadystate"] = sys.maxsize
+    else:
+        ret["steadystate"] = max(ret["steadystate"], steadystate(**ret))
+
+    # check docstring
+    funcname = inspect.getframeinfo(inspect.currentframe()).function
+    doc = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+    d = doc.split(":return:")[1].split("\n", 2)[2]
+    _check_output(yaml.safe_load(d), ret)
 
     return ret
 
