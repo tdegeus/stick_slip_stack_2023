@@ -797,6 +797,9 @@ def run(
 
         nchunk = file["/cusp/epsy/nchunk"][...] - 5
         pbar = tqdm.tqdm(total=nchunk, disable=not progress)
+        pbar.n = np.max(system.plastic_CurrentIndex())
+        pbar.set_description(f"inc = {inc:8d}, loaded from file")
+        pbar.refresh()
 
         for inc in range(inc + 1, sys.maxsize):
 
