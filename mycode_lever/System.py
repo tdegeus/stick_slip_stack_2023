@@ -1107,10 +1107,6 @@ def basic_output(
         system.setU(u)
 
         ret["gamma"][inc] = 90 - np.rad2deg(np.arctan2(ret["height"][-1], ubar[-1, 0]))
-        assert np.allclose(
-            ret["gamma"][inc], 90 - np.rad2deg(np.arctan2(ret["height"], ubar[:, 0]))
-        )
-
         Sig = system.Sig() / ret["sig0"]
         Eps = system.Eps() / ret["eps0"]
         idx = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, ret["N"])
