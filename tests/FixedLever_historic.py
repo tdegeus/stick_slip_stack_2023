@@ -50,12 +50,12 @@ class MyTests(unittest.TestCase):
         # with h5py.File(historic, "w") as file:
         #     file["epsd"] = out["epsd"]
         #     file["sigd"] = out["sigd"]
-        #     file["drive_fx"] = out["drive_fx"]
+        #     file["fxdrive_layers"] = out["fxdrive_layers"]
 
         with h5py.File(historic, "r") as file:
             self.assertTrue(np.allclose(file["epsd"][...], out["epsd"]))
             self.assertTrue(np.allclose(file["sigd"][...], out["sigd"]))
-            self.assertTrue(np.allclose(file["drive_fx"][...], out["drive_fx"]))
+            self.assertTrue(np.allclose(file["fxdrive_layers"][...], out["fxdrive_layers"]))
 
         shutil.rmtree(dirname)
 
