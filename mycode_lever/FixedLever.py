@@ -13,7 +13,6 @@ import shelephant
 import tqdm
 import XDMFWrite_h5py as xh
 
-from . import slurm
 from . import System
 from ._version import version
 
@@ -105,6 +104,26 @@ def cli_copy_perturbation(cli_args=None):
     return System.cli_copy_perturbation(cli_args=cli_args, entry_points=entry_points, config=config)
 
 
+def cli_rerun_event(cli_args=None):
+    """
+    See :py:func:`System.cli_rerun_event`.
+    """
+    return System.cli_rerun_event(
+        cli_args=cli_args,
+        entry_points=entry_points,
+        file_defaults=file_defaults,
+        config=config,
+        model=model,
+    )
+
+
+def cli_job_rerun_multislip(cli_args=None):
+    """
+    See :py:func:`System.cli_job_rerun_multislip`.
+    """
+    return System.cli_job_rerun_multislip(cli_args=cli_args, entry_points=entry_points)
+
+
 def find_completed(filepaths: list[str]) -> list[str]:
     """
     List simulations marked completed.
@@ -153,233 +172,6 @@ def cli_find_completed(cli_args=None):
 
     if cli_args is not None:
         return completed
-
-
-def runinc_event_basic(system: model.System, file: h5py.File, inc: int, Smax=sys.maxsize) -> dict:
-    """
-    Rerun increment and get basic event information.
-
-    :param system: The system (modified: all increments visited).
-    :param file: Open simulation HDF5 archive (read-only).
-    :param inc: The increment to return.
-    :param Smax: Optionally truncate the run at a given total S.
-
-    :return: Dictionary:
-        ``r`` : Position with columns (layer, block).
-        ``t`` : Time of each row in ``r``.
-    """
-
-    stored = file["/stored"][...]
-    N = file["/meta/normalisation/N"][...]
-
-    assert inc > 0
-    assert inc in stored
-    assert inc - 1 in stored
-
-    system.layerSetTargetUbar(file[f"/drive/ubar/{inc - 1:d}"][...])
-    system.setU(file[f"/disp/{inc - 1:d}"][...])
-
-    idx_n = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, N)
-    idx_t = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, N)
-
-    system.initEventDriven(
-        file["/run/event/delta_ubar"][...],
-        file["/run/event/active"][...],
-        file["/run/event/delta_u"][...],
-    )
-
-    system.eventDrivenStep(file["/run/event/deps"][...], not file["/kick"][inc])
-
-    R = []
-    T = []
-
-    while True:
-
-        niter = system.timeStepsUntilEvent()
-
-        idx = system.plastic_CurrentIndex().astype(int)[:, 0].reshape(-1, N)
-        t = system.t()
-
-        for r in np.argwhere(idx != idx_t):
-            R += [list(r)]
-            T += [t]
-
-        idx_t = np.array(idx, copy=True)
-
-        if np.sum(idx - idx_n) >= Smax:
-            break
-
-        if niter == 0:
-            break
-
-    return dict(r=np.array(R), t=np.array(T))
-
-
-def cli_rerun_event(cli_args=None):
-    """
-    Rerun increments and store basic event info.
-    """
-
-    class MyFmt(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
-        pass
-
-    funcname = inspect.getframeinfo(inspect.currentframe()).function
-    doc = textwrap.dedent(inspect.getdoc(globals()[funcname]))
-    parser = argparse.ArgumentParser(formatter_class=MyFmt, description=replace_entry_point(doc))
-    progname = entry_points[funcname]
-    output = file_defaults[funcname]
-
-    parser.add_argument(
-        "-s",
-        "--smax",
-        type=int,
-        help="Truncate at a given maximal total S",
-    )
-
-    parser.add_argument("-f", "--force", action="store_true", help="Force overwrite")
-    parser.add_argument("-i", "--inc", required=True, type=int, help="Increment number")
-    parser.add_argument("-o", "--output", type=str, default=output, help="Output file")
-    parser.add_argument("-v", "--version", action="version", version=version)
-    parser.add_argument("file", type=str, help="Simulation file")
-
-    if cli_args is None:
-        args = parser.parse_args(sys.argv[1:])
-    else:
-        args = parser.parse_args([str(arg) for arg in cli_args])
-
-    assert os.path.isfile(args.file)
-
-    if not args.force:
-        if os.path.isfile(args.output):
-            if not click.confirm(f'Overwrite "{args.output}"?'):
-                raise OSError("Cancelled")
-
-    with h5py.File(args.file, "r") as file:
-        system = init(file)
-        if args.smax is None:
-            ret = runinc_event_basic(system, file, args.inc)
-        else:
-            ret = runinc_event_basic(system, file, args.inc, args.smax)
-
-    with h5py.File(args.output, "w") as file:
-        file["r"] = ret["r"]
-        file["t"] = ret["t"]
-        meta = file.create_group(f"/meta/{config}/{progname}")
-        meta.attrs["version"] = version
-        meta.attrs["dependencies"] = System.dependencies(model)
-
-
-def cli_job_rerun_multislip(cli_args=None):
-    """
-    Rerun increments that have events in which more than one layer slips.
-    """
-
-    class MyFmt(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
-        pass
-
-    funcname = inspect.getframeinfo(inspect.currentframe()).function
-    doc = textwrap.dedent(inspect.getdoc(globals()[funcname]))
-    parser = argparse.ArgumentParser(formatter_class=MyFmt, description=replace_entry_point(doc))
-
-    parser.add_argument("info", type=str, help="EnsembleInfo (read-only)")
-
-    parser.add_argument(
-        "-m",
-        "--min",
-        type=float,
-        default=0.5,
-        help="Minimum fraction of blocks that slips on one of the layers to select the event",
-    )
-
-    parser.add_argument(
-        "-o",
-        "--outdir",
-        type=str,
-        default=os.getcwd(),
-        help="Output directory of all simulation and output variables",
-    )
-
-    parser.add_argument(
-        "-c",
-        "--conda",
-        type=str,
-        default=slurm.default_condabase,
-        help="Base name of the conda environment, appended '_E5v4' and '_s6g1'",
-    )
-
-    parser.add_argument(
-        "-n",
-        "--group",
-        type=int,
-        default=50,
-        help="Number of pushes to group in a single job",
-    )
-
-    parser.add_argument(
-        "-w",
-        "--time",
-        type=str,
-        default="24h",
-        help="Wall-time to allocate for the job",
-    )
-
-    parser.add_argument(
-        "-e",
-        "--executable",
-        type=str,
-        default=entry_points["cli_rerun_event"],
-        help="Executable to use",
-    )
-
-    parser.add_argument(
-        "-v",
-        "--version",
-        action="version",
-        version=version,
-    )
-
-    if cli_args is None:
-        args = parser.parse_args(sys.argv[1:])
-    else:
-        args = parser.parse_args([str(arg) for arg in cli_args])
-
-    assert os.path.isfile(args.info)
-    assert os.path.isdir(args.outdir)
-
-    basedir = os.path.dirname(args.info)
-    executable = args.executable
-
-    commands = []
-
-    with h5py.File(args.info, "r") as file:
-
-        N = file["/normalisation/N"][...]
-
-        for full in file["/full"].attrs["stored"]:
-            S = file[f"/full/{full}/S_layers"][...]
-            A = file[f"/full/{full}/A_layers"][...]
-            nany = np.sum(S > 0, axis=1)
-            nall = np.sum(A >= args.min * N, axis=1)
-            incs = np.argwhere((nany > 1) * (nall >= 1)).ravel()
-
-            if len(incs) == 0:
-                continue
-
-            simid = os.path.splitext(os.path.basename(full))[0]
-            filepath = os.path.join(basedir, full)
-            relfile = os.path.relpath(filepath, args.outdir)
-
-            for i in incs:
-                s = np.sum(S[i, :])
-                commands += [f"{executable} -i {i:d} -s {s:d} -o {simid}_inc={i:d}.h5 {relfile}"]
-
-    slurm.serial_group(
-        commands,
-        basename=args.executable.replace(" ", "_"),
-        group=args.group,
-        outdir=args.outdir,
-        sbatch={"time": args.time},
-    )
 
 
 def cli_plot(cli_args=None):
