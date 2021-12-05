@@ -1404,12 +1404,13 @@ def cli_job_rerun_multislip(cli_args: list[str], entry_points: dict):
     parser = argparse.ArgumentParser(formatter_class=MyFmt, description=replace_entry_point(doc))
     executable = entry_points["cli_rerun_event"]
 
-    parser.add_argument("info", type=str, help="EnsembleInfo (read-only)")
+    parser.add_argument("-b", "--basename", type=str, default=executable, help="Output base")
     parser.add_argument("-m", "--min", type=float, default=0.5, help="fraction of slipping blocks")
-    parser.add_argument("-n", "--group", type=int, default=50, help="#pushes to group per job")
+    parser.add_argument("-n", "--group", type=int, default=20, help="#pushes to group per job")
     parser.add_argument("-o", "--outdir", type=str, default=os.getcwd(), help="Output directory")
     parser.add_argument("-v", "--version", action="version", version=version)
     parser.add_argument("-w", "--time", type=str, default="24h", help="Walltime")
+    parser.add_argument("info", type=str, help="EnsembleInfo (read-only)")
 
     if cli_args is None:
         args = parser.parse_args(sys.argv[1:])
@@ -1432,9 +1433,11 @@ def cli_job_rerun_multislip(cli_args: list[str], entry_points: dict):
         for full in file["/full"].attrs["stored"]:
             S = file[f"/full/{full}/S_layers"][...]
             A = file[f"/full/{full}/A_layers"][...]
+            ss = file[f"/full/{full}/steadystate"][...]
             nany = np.sum(S > 0, axis=1)
             nall = np.sum(A >= args.min * N, axis=1)
             incs = np.argwhere(np.logical_and(nany > 1, nall >= 1)).ravel()
+            incs = incs[incs > ss]
 
             if len(incs) == 0:
                 continue
@@ -1449,7 +1452,7 @@ def cli_job_rerun_multislip(cli_args: list[str], entry_points: dict):
 
     slurm.serial_group(
         commands,
-        basename=executable,
+        basename=args.basename,
         group=args.group,
         outdir=args.outdir,
         sbatch={"time": args.time},
