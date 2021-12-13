@@ -1,3 +1,4 @@
+from . import Experiment
 from . import FixedLever
 from . import FreeLever
 from . import slurm
