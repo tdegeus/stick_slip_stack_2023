@@ -1,7 +1,6 @@
 import re
 from collections import defaultdict
 
-import cppcolormap as cm
 import h5py
 import numpy as np
 from numpy.typing import ArrayLike
@@ -124,11 +123,104 @@ def identify_slip(
     )
 
 
-def colors() -> list:
+def read_parameters(string: str, convert: dict = {"n": int, "e": int}) -> dict:
+    """
+    Read parameters from a string: it is assumed that parameters are split by ``_`` or ``/``
+    and that parameters are stored as ``name=value``.
+
+    :param string: ``key=value`` separated by ``/`` or ``_``.
+    :param convert: Type conversion for a selection of keys. E.g. ``{"id": int}``.
+    :return: Parameters as dictionary.
+    """
+
+    part = re.split("_|/", string)
+
+    ret = {}
+
+    for i in part:
+        if len(i.split("=")) > 1:
+            key, value = i.split("=")
+            ret[key] = value
+
+    if convert:
+        for key in convert:
+            ret[key] = convert[key](ret[key])
+
+    return ret
+
+
+def colors(name: str) -> list:
     """
     Return color-cycle.
 
+    :param name: ``"n"`` or ``"i"``.
     :return: List of colors.
     """
 
-    return [cm.tue()[0], cm.tue()[2], cm.tue()[4], cm.tue()[6], cm.tue()[8], cm.tue()[10]]
+    if name == "i":
+        c = (
+            np.array(
+                [
+                    [200, 200, 200],
+                    [152, 78, 163],
+                    [228, 26, 28],
+                    [55, 126, 184],
+                    [77, 175, 74],
+                    [255, 127, 0],
+                ]
+            )
+            / 255
+        )
+    else:
+        c = (
+            np.array(
+                [
+                    [200, 200, 200],
+                    [152.0000, 78.0000, 163.0000],
+                    [47.7044, 93.2453, 157.1853],
+                    [83.0613, 133.3842, 127.2201],
+                    [144.6349, 195.3938, 110.7479],
+                    [253, 188, 66],
+                    # [255.0000, 254.9971, 102.0240],
+                ]
+            )
+            / 255
+        )
+
+    return [i for i in c]
+
+
+def markers(name: str) -> list:
+    """
+    Return marker-cycle.
+
+    :param name: ``"n"`` or ``"i"``.
+    :return: List of markers.
+    """
+
+    return ["o", "<", ">", "^", "d", "s"]
+
+
+def labels(name: str) -> list:
+    """
+    Return marker-cycle.
+
+    :param name: ``"n"`` or ``"i"``.
+    :return: List of markers.
+    """
+
+    return [rf"${name} = {i}$" for i in range(nplate() + 1)]
+
+
+def nplate() -> int:
+    """
+    Maximum number of plates to consider.
+    """
+    return 5
+
+
+def nlayer() -> int:
+    """
+    Maximum number of layers to consider.
+    """
+    return 2 * nplate() - 1
