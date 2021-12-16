@@ -16,20 +16,23 @@ class MyTests(unittest.TestCase):
     Tests
     """
 
-    def test_SequenceDelta(self):
+    def test_indices(self):
 
-        delta = 0.5 + np.random.random(10)
-        delta_inf = np.concatenate((delta, delta[-1] * np.ones(30)))
-        cumsum_inf = np.cumsum(delta_inf)
+        indices = np.array([0, -1, 1, -2, 2, -3, 3, -4, 4])
 
-        d = my.System.SequenceDelta(delta)
+        for q in range(0, my.System.nlayer(), 2):
+            self.assertEqual(my.System.layer2plate(q), indices[q])
 
-        for i in range(cumsum_inf.size):
-            self.assertTrue(np.isclose(d.get_delta(i), delta_inf[i]))
-            self.assertTrue(np.isclose(d.get_cumsum(i), cumsum_inf[i]))
+        for q in range(1, my.System.nlayer(), 2):
+            self.assertEqual(my.System.layer2interface(q), -indices[q])
 
-        self.assertTrue(np.allclose(d.list_delta(delta_inf.size), delta_inf))
-        self.assertTrue(np.allclose(d.list_delta(cumsum_inf.size), cumsum_inf))
+        for i in range(0, my.System.nplate() + 1):
+            self.assertEqual(my.System.plate2layer(i), np.argwhere(indices == i).ravel()[0])
+
+        for i in range(1, my.System.nplate() + 1):
+            self.assertEqual(my.System.interface2layer(i), np.argwhere(indices == -i).ravel()[0])
+
+        self.assertEqual(indices[-1], my.System.nplate())
 
 
 if __name__ == "__main__":

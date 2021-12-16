@@ -8,7 +8,6 @@ import textwrap
 from typing import Union
 
 import click
-import cppcolormap as cm
 import GMatElastoPlasticQPot.Cartesian2d as GMat
 import GooseFEM
 import GooseHDF5 as g5
@@ -21,6 +20,7 @@ import tqdm
 import yaml
 from numpy.typing import ArrayLike
 
+from . import Experiment
 from . import mesh
 from . import slurm
 from . import storage
@@ -648,51 +648,103 @@ def generate(
         assert np.min(np.diff(read_epsy(file), axis=1)) > file["/run/event/deps"][...]
 
 
-def colors(name: str = "plates") -> list:
+def colors(name: str) -> list:
     """
     Return color-cycle.
 
-    :param name: ``"plates"`` or ``"interfaces"`` or ``"layers"``
+    :param name: ``"n"`` or ``"i"``.
     :return: List of colors.
     """
-
-    if name.lower() == "plates":
-        return [cm.tue()[0], cm.tue()[4], cm.tue()[6], cm.tue()[8], cm.tue()[10]]
-
-    if name.lower() == "interfaces":
-        return [cm.tue()[1], cm.tue()[5], cm.tue()[7], cm.tue()[9]]
-
-    if name.lower() == "layers":
-        return [
-            cm.tue()[0],
-            cm.tue()[1],
-            cm.tue()[4],
-            cm.tue()[5],
-            cm.tue()[6],
-            cm.tue()[7],
-            cm.tue()[8],
-            cm.tue()[9],
-            cm.tue()[10],
-        ]
-
-    raise OSError("Unknown name, choose from 'plates' or 'interfaces'")
+    return Experiment.colors(name)[: nplate() + 1]
 
 
-def markers(name: str = "plates") -> list:
+def markers(name: str) -> list:
     """
     Return marker-cycle.
 
-    :param name: ``"plates"`` or ``"interfaces"``
+    :param name: ``"n"`` or ``"i"``.
     :return: List of markers.
     """
 
-    if name.lower() == "plates":
-        return ["o", "^", ">", "v", "<"]
+    return Experiment.markers(name)[: nplate() + 1]
 
-    if name.lower() == "interfaces":
-        return ["^", ">", "v", "<"]
 
-    raise OSError("Unknown name, choose from 'plates' or 'interfaces'")
+def labels(name: str) -> list:
+    """
+    Return marker-cycle.
+
+    :param name: ``"n"`` or ``"i"``.
+    :return: List of markers.
+    """
+    return Experiment.labels(name)[: nplate() + 1]
+
+
+def nplate() -> int:
+    """
+    Maximum number of plates to consider.
+    """
+    return 4
+
+
+def nlayer() -> int:
+    """
+    Maximum number of layers to consider.
+    """
+    return 2 * nplate() - 1
+
+
+def plate2layer(i: int) -> int:
+    """
+    Return the index of the layer of the i-th plate.
+    Numbering is as follows::
+
+        layer = 6 : i = 3 (plate)
+        layer = 5 : i = 3 (interface)
+        layer = 4 : i = 2 (plate)
+        layer = 3 : i = 2 (interface)
+        layer = 2 : i = 1 (plate)
+        layer = 1 : i = 1 (interface)
+        layer = 0 : i = 0 (plate)
+
+    :param i: Index of the plate.
+    :return: Index of the layer.
+    """
+    return int(i * 2)
+
+
+def interface2layer(i: int) -> int:
+    """
+    Return the index of the layer of the i-th interface.
+    See :py:func:`plate2layer` for numbering.
+
+    :param i: Index of the interface.
+    :return: Index of the layer.
+    """
+
+    assert i > 0
+    return int(plate2layer(i) - 1)
+
+
+def layer2plate(layer: int) -> int:
+    """
+    Return the plate index.
+    See :py:func:`plate2layer` for numbering.
+
+    :param layer: Layers index.
+    :return: Plate index.
+    """
+    return int(layer / 2)
+
+
+def layer2interface(layer: int) -> int:
+    """
+    Return the interface index.
+    See :py:func:`plate2layer` for numbering.
+
+    :param layer: Layers index.
+    :return: Interface index.
+    """
+    return int((layer + 1) / 2)
 
 
 def create_check_meta(
@@ -1001,6 +1053,26 @@ def _check_output(a: Union[dict, list], b: Union[dict, list]):
     for key in b:
         if key not in a:
             raise OSError(f"{key} not in a")
+
+
+def restore_inc(
+    system,
+    file: h5py.File,
+    inc: int,
+):
+    """
+    Restore increment.
+
+    :param system: The system (modified: all increments visited).
+    :param file: Open simulation HDF5 archive (read-only).
+    :param inc: Increment number
+    """
+
+    ubar = file[f"/drive/ubar/{inc:d}"][...]
+    system.layerSetTargetUbar(ubar)
+
+    u = file[f"/disp/{inc:d}"][...]
+    system.setU(u)
 
 
 def basic_output(

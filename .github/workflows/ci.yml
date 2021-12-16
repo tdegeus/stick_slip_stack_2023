@@ -47,4 +47,5 @@ jobs:
         python tests/FixedLever_historic.py
         python tests/FreeLever_historic.py
         python tests/slurm.py
+        python tests/System.py
         python tests/tag.py
