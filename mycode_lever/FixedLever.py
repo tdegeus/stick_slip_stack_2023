@@ -3,6 +3,7 @@ import inspect
 import os
 import sys
 import textwrap
+from functools import singledispatch
 
 import click
 import FrictionQPotFEM.UniformMultiLayerIndividualDrive2d as model
@@ -12,6 +13,7 @@ import numpy as np
 import shelephant
 import tqdm
 import XDMFWrite_h5py as xh
+import yaml
 
 from . import System
 from ._version import version
@@ -298,6 +300,128 @@ def cli_ensembleinfo(cli_args=None):
         meta = output.create_group(f"/meta/{config}/{progname}")
         meta.attrs["version"] = version
         meta.attrs["dependencies"] = System.dependencies(model)
+
+
+@singledispatch
+def ensembleinfo_summary_singleslip():
+    """
+    Read specific ensemble info for event in which only one layer slips.
+
+    :param filename: Filename of the stored EnsembleInfo.
+    :param itarget: Limit output to slip on a specific layer.
+    :return: A dictionary as follows::
+
+        inc: Increment number.
+        ifile: File index.
+        i: Slipping interface.
+        sig0: Macroscopic stress before slip.
+        sig1: Macroscopic stress after slip.
+        mu0: Stress on the layer that slips, before slip.
+        mu1: Stress on the layer that slips, after slip.
+        dmu: mu1 - mu0.
+        Si: Slip (number of times a block yields divided by ``N``) on the layer that slips.
+        Sj: Slip (number of times a block yields divided by ``N``) on all layers that do not slip.
+    """
+
+
+@ensembleinfo_summary_singleslip.register(str)
+def _(filename: str, itarget: int = None) -> dict:
+
+    if not os.path.isfile(filename):
+        return None
+
+    with h5py.File(filename, "r") as file:
+        return ensembleinfo_summary_singleslip(file, itarget)
+
+
+@ensembleinfo_summary_singleslip.register(h5py.File)
+def _(file: h5py.File, itarget: int = None) -> dict:
+
+    l2i = np.vectorize(System.layer2interface)
+
+    ret = {
+        "inc": [],
+        "ifile": [],
+        "i": [],
+        "sig0": [],
+        "sig1": [],
+        "mu0": [],
+        "mu1": [],
+        "dmu": [],
+        "Si": [],
+        "Sj": [],
+    }
+
+    norm = file["/normalisation"]
+    N = norm["N"][...]
+
+    for ifile, filename in enumerate(file["full"].attrs["stored"]):
+
+        data = file[f"/full/{filename}"]
+
+        ss = int(data["steadystate"][...])
+        A_layers = data["A_layers"][...]
+        Si = data["S_layers"][...]
+        sigd_layers = data["sigd_layers"][...]
+        sigd = data["sigd"][...]
+
+        interf = np.tile(l2i(np.arange(A_layers.shape[1])), (A_layers.shape[0], 1))
+
+        sig0 = np.roll(sigd, +1, axis=0)
+        sig1 = sigd
+
+        mu0 = np.roll(sigd_layers, +1, axis=0)
+        mu1 = sigd_layers
+        dmu = -np.diff(sigd_layers, prepend=0, axis=0)
+
+        keep = np.sum(A_layers == N, axis=1) == 1
+        keep[: ss + 1] = False
+
+        if itarget is not None:
+            ni, nl = A_layers.shape
+            interface = np.tile(l2i(np.arange(nl)), (ni, 1))
+            interface[A_layers != N] = 0
+            keep = np.logical_and(keep, np.sum(interface, axis=1) == itarget)
+
+        if np.sum(keep) == 0:
+            continue
+
+        A_layers = A_layers[keep]
+        interf = interf[keep]
+        sig0 = sig0[keep]
+        sig1 = sig1[keep]
+        mu0 = mu0[keep]
+        mu1 = mu1[keep]
+        dmu = dmu[keep]
+        Si = Si[keep]
+        mu0 = mu0[A_layers == N]
+        mu1 = mu1[A_layers == N]
+        dmu = dmu[A_layers == N]
+        Sj = np.sum(Si, axis=1) - Si[A_layers == N]
+        Si = Si[A_layers == N]
+        interf = interf[A_layers == N]
+
+        ret["ifile"] += (ifile * np.ones(np.sum(keep), dtype=int)).tolist()
+        ret["inc"] += np.argwhere(keep).ravel().tolist()
+        ret["i"] += interf.tolist()
+        ret["sig0"] += sig0.tolist()
+        ret["sig1"] += sig1.tolist()
+        ret["mu0"] += mu0.tolist()
+        ret["mu1"] += mu1.tolist()
+        ret["dmu"] += dmu.tolist()
+        ret["Si"] += (Si / N).tolist()
+        ret["Sj"] += (Sj / N).tolist()
+
+    for key in ret:
+        ret[key] = np.array(ret[key])
+
+    # check docstring
+    funcname = "ensembleinfo_summary_singleslip"
+    doc = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+    d = doc.split(":return:")[1].split("\n", 2)[2]
+    System._check_output(yaml.safe_load(d), ret)
+
+    return ret
 
 
 def view_paraview(
