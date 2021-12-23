@@ -319,8 +319,8 @@ def ensembleinfo_summary_singleslip():
         mu0: Stress on the layer that slips, before slip.
         mu1: Stress on the layer that slips, after slip.
         dmu: mu1 - mu0.
-        Si: Slip (number of times a block yields divided by ``N``) on the layer that slips.
-        Sj: Slip (number of times a block yields divided by ``N``) on all layers that do not slip.
+        Si: Slip on the layer that slips.
+        Sj: Slip on all layers that do not slip.
     """
 
 
@@ -409,8 +409,8 @@ def _(file: h5py.File, itarget: int = None) -> dict:
         ret["mu0"] += mu0.tolist()
         ret["mu1"] += mu1.tolist()
         ret["dmu"] += dmu.tolist()
-        ret["Si"] += (Si / N).tolist()
-        ret["Sj"] += (Sj / N).tolist()
+        ret["Si"] += Si.tolist()
+        ret["Sj"] += Sj.tolist()
 
     for key in ret:
         ret[key] = np.array(ret[key])
