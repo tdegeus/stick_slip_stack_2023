@@ -1170,6 +1170,15 @@ def basic_output(
     idx_0 = np.array(idx_n, copy=True)
     ret["steadystate"] = None
 
+    plastic = system.plastic().reshape(-1, ret["N"])
+    y = np.zeros(nlayer)
+    for i in range(nlayer):
+        assert not ret["is_plastic"][i] or np.all(
+            np.equal(plastic[layer2interface(i) - 1, :], system.layerElements(i))
+        )
+        y[i] = np.mean(system.coor()[np.unique(system.conn()[system.layerElements(i), :]), 1])
+    assert np.all(np.diff(y) >= 0)
+
     for inc in tqdm.tqdm(incs, disable=not verbose):
 
         ubar = file[f"/drive/ubar/{inc:d}"][...]
