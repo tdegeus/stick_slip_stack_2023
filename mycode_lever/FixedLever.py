@@ -314,13 +314,17 @@ def ensembleinfo_summary_singleslip():
         inc: Increment number.
         ifile: File index.
         i: Slipping interface.
+        F0: External force before slip.
+        F1: External force after slip.
         sig0: Macroscopic stress before slip.
         sig1: Macroscopic stress after slip.
         mu0: Stress on the layer that slips, before slip.
         mu1: Stress on the layer that slips, after slip.
         dmu: mu1 - mu0.
-        Si: Slip (number of times a block yields divided by ``N``) on the layer that slips.
-        Sj: Slip (number of times a block yields divided by ``N``) on all layers that do not slip.
+        Si: Slip on the layer that slips.
+        Sj: Slip on all layers that do not slip.
+        N: Number of blocks per layer.
+        n: Number of driven plates.
     """
 
 
@@ -339,10 +343,16 @@ def _(file: h5py.File, itarget: int = None) -> dict:
 
     l2i = np.vectorize(System.layer2interface)
 
+    norm = file["/normalisation"]
+    N = norm["N"][...]
+    H = norm["height"][...]
+
     ret = {
         "inc": [],
         "ifile": [],
         "i": [],
+        "F0": [],
+        "F1": [],
         "sig0": [],
         "sig1": [],
         "mu0": [],
@@ -350,10 +360,9 @@ def _(file: h5py.File, itarget: int = None) -> dict:
         "dmu": [],
         "Si": [],
         "Sj": [],
+        "N": N,
+        "n": System.layer2plate(norm["nlayer"][...]),
     }
-
-    norm = file["/normalisation"]
-    N = norm["N"][...]
 
     for ifile, filename in enumerate(file["full"].attrs["stored"]):
 
@@ -364,8 +373,12 @@ def _(file: h5py.File, itarget: int = None) -> dict:
         Si = data["S_layers"][...]
         sigd_layers = data["sigd_layers"][...]
         sigd = data["sigd"][...]
+        F = np.sum(data["fxdrive_layers"][...] * H.reshape(1, -1), axis=1)
 
         interf = np.tile(l2i(np.arange(A_layers.shape[1])), (A_layers.shape[0], 1))
+
+        F0 = np.roll(F, +1, axis=0)
+        F1 = F
 
         sig0 = np.roll(sigd, +1, axis=0)
         sig1 = sigd
@@ -388,6 +401,8 @@ def _(file: h5py.File, itarget: int = None) -> dict:
 
         A_layers = A_layers[keep]
         interf = interf[keep]
+        F0 = F0[keep]
+        F1 = F1[keep]
         sig0 = sig0[keep]
         sig1 = sig1[keep]
         mu0 = mu0[keep]
@@ -404,13 +419,123 @@ def _(file: h5py.File, itarget: int = None) -> dict:
         ret["ifile"] += (ifile * np.ones(np.sum(keep), dtype=int)).tolist()
         ret["inc"] += np.argwhere(keep).ravel().tolist()
         ret["i"] += interf.tolist()
+        ret["F0"] += F0.tolist()
+        ret["F1"] += F1.tolist()
         ret["sig0"] += sig0.tolist()
         ret["sig1"] += sig1.tolist()
         ret["mu0"] += mu0.tolist()
         ret["mu1"] += mu1.tolist()
         ret["dmu"] += dmu.tolist()
-        ret["Si"] += (Si / N).tolist()
-        ret["Sj"] += (Sj / N).tolist()
+        ret["Si"] += Si.tolist()
+        ret["Sj"] += Sj.tolist()
+
+    for key in ret:
+        ret[key] = np.array(ret[key])
+
+    # check docstring
+    funcname = "ensembleinfo_summary_singleslip"
+    doc = textwrap.dedent(inspect.getdoc(globals()[funcname]))
+    d = doc.split(":return:")[1].split("\n", 2)[2]
+    System._check_output(yaml.safe_load(d), ret)
+
+    return ret
+
+
+@singledispatch
+def ensembleinfo_summary_any():
+    """
+    Read ensemble info for macroscopic slip event (single or multi-slip.
+
+    :param filename: Filename of the stored EnsembleInfo.
+    :return: A dictionary as follows::
+
+        inc: Increment number.
+        ifile: File index.
+        gamma: Rotation of the driving lever, before slip.
+        slipping: Per interface (columns) if it is slipping.
+        sig0: Macroscopic stress before slip.
+        sig1: Macroscopic stress after slip.
+        mu0: Stress per interface (columns), before slip.
+        mu1: Stress per interface (columns), after slip.
+        S: Slip per interface (columns).
+        N: Number of blocks per layer.
+        n: Number of driven plates.
+    """
+
+
+@ensembleinfo_summary_any.register(str)
+def _(filename: str) -> dict:
+
+    if not os.path.isfile(filename):
+        return None
+
+    with h5py.File(filename, "r") as file:
+        return ensembleinfo_summary_any(file)
+
+
+@ensembleinfo_summary_any.register(h5py.File)
+def _(file: h5py.File) -> dict:
+
+    norm = file["/normalisation"]
+    N = norm["N"][...]
+
+    ret = {
+        "inc": [],
+        "ifile": [],
+        "gamma": [],
+        "sig0": [],
+        "sig1": [],
+        "slipping": [],
+        "mu0": [],
+        "mu1": [],
+        "S": [],
+        "N": N,
+        "n": System.layer2plate(norm["nlayer"][...]),
+    }
+
+    interf = [System.interface2layer(i + 1) for i in range(ret["n"])]
+    print(interf)
+
+    for ifile, filename in enumerate(file["full"].attrs["stored"]):
+
+        data = file[f"/full/{filename}"]
+
+        ss = int(data["steadystate"][...])
+        A_layers = data["A_layers"][...]
+        Si = data["S_layers"][...]
+        sigd_layers = data["sigd_layers"][...]
+        sigd = data["sigd"][...]
+        gamma = data["gamma"][...]
+
+        sig0 = np.roll(sigd, +1, axis=0)
+        sig1 = sigd
+
+        mu0 = np.roll(sigd_layers, +1, axis=0)
+        mu1 = sigd_layers
+
+        keep = np.sum(A_layers == N, axis=1) >= 1
+        keep[: ss + 1] = False
+
+        if np.sum(keep) == 0:
+            continue
+
+        A_layers = A_layers[keep]
+        gamma = gamma[keep]
+        sig0 = sig0[keep]
+        sig1 = sig1[keep]
+        mu0 = mu0[keep]
+        mu1 = mu1[keep]
+        Si = Si[keep]
+
+        ret["ifile"] += (ifile * np.ones(np.sum(keep), dtype=int)).tolist()
+        ret["inc"] += np.argwhere(keep).ravel().tolist()
+        ret["i"] += (A_layers == N)[:, iplas].tolist()
+        ret["gamma"] += gamma.tolist()
+        ret["sig0"] += sig0.tolist()
+        ret["sig1"] += sig1.tolist()
+        ret["mu0"] += mu0[:, iplas].tolist()
+        ret["mu1"] += mu1[:, iplas].tolist()
+        ret["S"] += S[:, iplas].tolist()
 
     for key in ret:
         ret[key] = np.array(ret[key])

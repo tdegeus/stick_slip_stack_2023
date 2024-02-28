@@ -1048,11 +1048,13 @@ def _check_output(a: Union[dict, list], b: Union[dict, list]):
 
     for key in a:
         if key not in b:
-            raise OSError(f"{key} not in b")
+            m = f"{key} not in b"
+            raise OSError(m)
 
     for key in b:
         if key not in a:
-            raise OSError(f"{key} not in a")
+            m = f"{key} not in a"
+            raise OSError(m)
 
 
 def restore_inc(
@@ -1099,6 +1101,7 @@ def basic_output(
         ubarx_layers: np.array([ninc, nlayer]) # average x-displacement per layer
         fxdrive_layers: np.array([ninc, nlayer]) # reaction for per layer: only valid if drive[:, 0]
         gamma: np.array([ninc]) # rotation of the lever, units: degrees
+        gamma0: float # gamma for a typical slip event on the first plastic layer
         inc: np.array([ninc]) # increment numbers
         kick: np.array([ninc]) # kick (True) or elastic load (False)
         steadystate: int # first steadystate increment (or infinity)
@@ -1170,6 +1173,15 @@ def basic_output(
     idx_0 = np.array(idx_n, copy=True)
     ret["steadystate"] = None
 
+    plastic = system.plastic().reshape(-1, ret["N"])
+    y = np.zeros(nlayer)
+    for i in range(nlayer):
+        assert not ret["is_plastic"][i] or np.all(
+            np.equal(plastic[layer2interface(i) - 1, :], system.layerElements(i))
+        )
+        y[i] = np.mean(system.coor()[np.unique(system.conn()[system.layerElements(i), :]), 1])
+    assert np.all(np.diff(y) >= 0)
+
     for inc in tqdm.tqdm(incs, disable=not verbose):
 
         ubar = file[f"/drive/ubar/{inc:d}"][...]
@@ -1209,6 +1221,9 @@ def basic_output(
         ret["steadystate"] = sys.maxsize
     else:
         ret["steadystate"] = max(ret["steadystate"], steadystate(**ret))
+
+    ret["gamma0"] = 90 - np.rad2deg(np.arctan2(ret["height"][1], ret["eps0"] * ret["l0"]))
+    ret["gamma"] /= ret["gamma0"]
 
     # check docstring
     funcname = inspect.getframeinfo(inspect.currentframe()).function
@@ -1429,10 +1444,10 @@ def cli_rerun_event(
     progname = entry_points[funcname]
     output = file_defaults[funcname]
 
-    parser.add_argument("-s", "--smax", type=int, help="Truncate at a maximum total S")
     parser.add_argument("-f", "--force", action="store_true", help="Force overwrite")
     parser.add_argument("-i", "--inc", required=True, type=int, help="Increment number")
     parser.add_argument("-o", "--output", type=str, default=output, help="Output file")
+    parser.add_argument("-s", "--smax", type=int, help="Truncate at a maximum total S")
     parser.add_argument("-v", "--version", action="version", version=version)
     parser.add_argument("file", type=str, help="Simulation file")
 
